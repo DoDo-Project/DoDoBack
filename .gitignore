@@ -39,3 +39,4 @@ out/
 ### 설정 파일 ###
 src/main/resources/application.yaml
 src/main/resources/application.yml
+src/main/resources/fcm-key.json

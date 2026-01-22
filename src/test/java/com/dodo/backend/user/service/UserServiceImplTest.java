@@ -26,7 +26,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 /**
- * {@link UserService}의 비즈니스 로직을 검증하는 통합 테스트 클래스입니다.
+ * {@link UserServiceImpl}의 비즈니스 로직을 검증하는 통합 테스트 클래스입니다.
  * <p>
  * 사용자 계정 상태에 따른 접근 제어 및 신규 회원 가입 프로세스가
  * DB 및 외부 API 모킹 환경에서 정상적으로 동작하는지 확인합니다.
@@ -34,7 +34,7 @@ import static org.mockito.Mockito.mock;
 @SpringBootTest
 @Transactional
 @Slf4j
-class UserServiceTest {
+class UserServiceImplTest {
 
     @Autowired
     private UserService userService;

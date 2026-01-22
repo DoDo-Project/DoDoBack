@@ -1,11 +1,9 @@
 package com.dodo.backend.auth.controller;
 
-import com.dodo.backend.auth.dto.request.AuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
-import com.dodo.backend.auth.dto.response.AuthResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
-import com.dodo.backend.auth.service.AuthService;
+import com.dodo.backend.auth.service.AuthServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Auth API", description = "인증/인가 관련 API")
 public class AuthController {
 
-    private final AuthService authService;
+    private final AuthServiceImpl authServiceImpl;
 
     @Operation(summary = "소셜 로그인 (네이버, 구글)", description = "네이버 인가 코드를 받아 로그인 또는 회원가입 분기 처리를 합니다.")
     @ApiResponses(value = {
@@ -37,6 +35,6 @@ public class AuthController {
     })
     @PostMapping("/social-login")
     public ResponseEntity<?> doSocialLogin(@RequestBody @Valid SocialLoginRequest request) {
-        return authService.socialLogin(request);
+        return authServiceImpl.socialLogin(request);
     }
 }

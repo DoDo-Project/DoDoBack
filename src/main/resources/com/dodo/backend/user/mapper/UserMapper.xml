@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- 사용자(User) 도메인의 복잡한 조회 및 동적 쿼리를 담당하는 MyBatis Mapper XML입니다. -->
+<mapper namespace="com.dodo.backend.user.mapper.UserMapper">
+    <select id="findByEmail" resultType="com.dodo.backend.user.entity.User">
+        SELECT
+            users_id,
+            role,
+            user_created_at,
+            name,
+            email,
+            has_family,
+            nickname,
+            region,
+            profile_url,
+            user_status,
+            user_status_updated_at,
+            suspended_end_at,
+            notification_enabled
+        FROM users
+        WHERE email = #{email}
+    </select>
+</mapper>

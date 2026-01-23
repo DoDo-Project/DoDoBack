@@ -23,4 +23,9 @@ public interface AuthService {
      * 네이버 인증 서버와 통신하여 인가 코드를 액세스 토큰으로 교환합니다.
      */
     public String getNaverAccessToken(String code);
+
+    /**
+     * 구글 인증 서버와 통신하여 인가 코드를 액세스 토큰으로 교환합니다.
+     */
+    public String getGoogleAccessToken(String code);
 }

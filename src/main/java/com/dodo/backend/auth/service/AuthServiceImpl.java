@@ -9,6 +9,7 @@ import com.dodo.backend.user.service.UserService;
 import com.dodo.backend.user.service.UserServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -42,6 +43,15 @@ public class AuthServiceImpl implements AuthService {
     @Value("${naver.client_secret}")
     private String naverClientSecret;
 
+    @Value("${google.client_id}")
+    private String googleClientId;
+
+    @Value("${google.redirect_uri}")
+    private String googleRedirectUri;
+
+    @Value("${google.client_secret}")
+    private String googleClientSecret;
+
     @Value("${jwt.access-token-validity}")
     private Long accessTokenValidity;
 
@@ -62,8 +72,20 @@ public class AuthServiceImpl implements AuthService {
             throw new AuthException(INVALID_REQUEST);
         }
 
-        String naverAccessToken = getNaverAccessToken(request.getCode());
-        Map<String, Object> userInfo = userService.getNaverUserProfile(naverAccessToken);
+        Map<String, Object> userInfo;
+
+        if ("NAVER".equals(request.getProvider())) {
+            String naverAccessToken = getNaverAccessToken(request.getCode());
+            userInfo = userService.getNaverUserProfile(naverAccessToken);
+
+        } else if ("GOOGLE".equals(request.getProvider())) {
+            String googleAccessToken = getGoogleAccessToken(request.getCode());
+            userInfo = userService.getGoogleUserProfile(googleAccessToken);
+
+        } else {
+            throw new AuthException(INVALID_REQUEST);
+        }
+
         boolean isNewMember = (boolean) userInfo.get("isNewMember");
 
         if (isNewMember) {
@@ -130,6 +152,30 @@ public class AuthServiceImpl implements AuthService {
             throw new AuthException(INTERNAL_SERVER_ERROR);
         }
 
+        return (String) response.get("access_token");
+    }
+
+    @Override
+    public String getGoogleAccessToken(String code) {
+        Map response = webClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .scheme("https")
+                        .host("oauth2.googleapis.com")
+                        .path("/token")
+                        .queryParam("grant_type", "authorization_code")
+                        .queryParam("client_id", googleClientId)
+                        .queryParam("client_secret", googleClientSecret)
+                        .queryParam("code", code)
+                        .queryParam("redirect_uri", googleRedirectUri)
+                        .build())
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block();
+
+        if (response == null || !response.containsKey("access_token")) {
+            throw new AuthException(INTERNAL_SERVER_ERROR);
+        }
         return (String) response.get("access_token");
     }
 }

@@ -15,7 +15,7 @@ public class AuthRequest {
     @NoArgsConstructor
     public static class SocialLoginRequest {
 
-        @Schema(description = "소셜 제공자 타입 (GOOGLE, NAVER, KAKAO 등)", example = "GOOGLE")
+        @Schema(description = "소셜 제공자 타입 (GOOGLE, NAVER)", example = "GOOGLE")
         @NotBlank(message = "provider는 필수 값입니다.")
         private String provider;
 

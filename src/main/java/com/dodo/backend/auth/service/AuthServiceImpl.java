@@ -3,7 +3,9 @@ package com.dodo.backend.auth.service;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
+import com.dodo.backend.auth.entity.RefreshToken;
 import com.dodo.backend.auth.exception.AuthException;
+import com.dodo.backend.auth.repository.RefreshTokenRepository;
 import com.dodo.backend.common.util.JwtTokenProvider;
 import com.dodo.backend.user.service.UserService;
 import com.dodo.backend.user.service.UserServiceImpl;
@@ -33,6 +35,7 @@ public class AuthServiceImpl implements AuthService {
     private final WebClient webClient;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Value("${naver.client_id}")
     private String naverClientId;
@@ -63,7 +66,7 @@ public class AuthServiceImpl implements AuthService {
      * 2. Naver Access Token 획득
      * 3. 유저 프로필 조회 및 가입 여부 확인
      * 4. 신규 유저(202): Registration Token 발급
-     * 5. 기존 유저(200): Access/Refresh Token 발급
+     * 5. 기존 유저(200): Access/Refresh Token 발급 및 저장
      */
     @Override
     public ResponseEntity<?> socialLogin(SocialLoginRequest request) {
@@ -110,6 +113,12 @@ public class AuthServiceImpl implements AuthService {
 
             String accessToken = jwtTokenProvider.createAccessToken(userId, role);
             String refreshToken = jwtTokenProvider.createRefreshToken(userId);
+
+            refreshTokenRepository.save(RefreshToken.builder()
+                    .usersId(userId.toString())
+                    .refreshToken(refreshToken)
+                    .role(role)
+                    .build());
 
             return ResponseEntity.ok(
                     SocialLoginResponse.builder()

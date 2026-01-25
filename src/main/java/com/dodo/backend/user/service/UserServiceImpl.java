@@ -1,63 +1,58 @@
 package com.dodo.backend.user.service;
 
 import com.dodo.backend.auth.exception.AuthException;
+import com.dodo.backend.common.util.JwtTokenProvider;
+import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
+import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.entity.User;
 import com.dodo.backend.user.entity.UserRole;
 import com.dodo.backend.user.entity.UserStatus;
+import com.dodo.backend.user.exception.UserException;
+import com.dodo.backend.user.mapper.UserMapper;
 import com.dodo.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
 import static com.dodo.backend.auth.exception.AuthErrorCode.ACCOUNT_RESTRICTED;
+import static com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse.toDto;
 import static com.dodo.backend.user.entity.UserStatus.*;
+import static com.dodo.backend.user.exception.UserErrorCode.*;
 
 /**
- * {@link UserService}의 구현체로, 네이버 Open API와 연동하여 유저 정보를 처리합니다.
+ * {@link UserService}의 구현체로, 유저 도메인의 비즈니스 로직을 수행합니다.
  * <p>
- * {@link UserRepository}를 통해 회원 가입 여부를 확인하고,
- * 정지/휴면 등 계정 상태에 따른 비즈니스 예외 처리를 담당합니다.
+ * 소셜 로그인 직후의 유저 상태 판별 및 저장,
+ * 추가 정보 입력을 통한 회원가입 완료 처리를 담당합니다.
  */
 @Service
 @RequiredArgsConstructor
-public class UserServiceImpl implements UserService{
+@Slf4j
+public class UserServiceImpl implements UserService {
 
-    private final WebClient webClient;
     private final UserRepository userRepository;
+    private final UserMapper userMapper;
+    private final JwtTokenProvider jwtTokenProvider;
 
     /**
      * {@inheritDoc}
      * <p>
      * 상세 처리 프로세스:
-     * 1. {@link WebClient}를 통해 네이버 프로필 API 호출
-     * 2. 수신된 JSON 응답에서 이메일, 이름, 프로필 이미지 추출
-     * 3. {@code email}을 기준으로 기존 가입 여부 조회
-     * 4. 기존 회원일 경우: 계정 상태(정지/삭제/휴면)를 체크하여 예외 또는 유저 데이터 반환
-     * 5. 신규 회원일 경우: 기본 정보를 {@code User} 엔티티로 생성하여 DB에 저장
+     * 1. 이메일을 기준으로 DB에서 유저 조회
+     * 2. (기존 유저) 계정 제재 상태(정지/삭제 등) 검증 및 가입 여부 확인
+     * 3. (신규 유저) 'REGISTER' 상태의 유저 엔티티 생성 및 저장
      *
-     * @throws AuthException 유저 상태가 서비스 이용 제한(SUSPENDED, DORMANT, DELETED)인 경우
+     * @return 신규 회원 여부(isNewMember), 유저 식별자, 권한 등을 포함한 Map
+     * @throws AuthException 계정이 정지, 휴면, 또는 삭제된 상태일 경우
      */
     @Transactional
     @Override
-    public Map<String, Object> getNaverUserProfile(String accessToken) {
-
-        Map response = webClient.get()
-                .uri("https://openapi.naver.com/v1/nid/me")
-                .header("Authorization", "Bearer " + accessToken)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
-
-        Map<String, Object> responseMap = (Map<String, Object>) response.get("response");
-        String email = (String) responseMap.get("email");
-        String name = (String) responseMap.get("name");
-        String profileImage = (String) responseMap.get("profile_image");
-
+    public Map<String, Object> findOrSaveSocialUser(String email, String name, String profileImage) {
         Map<String, Object> resultMap = new HashMap<>();
         resultMap.put("email", email);
         resultMap.put("name", name);
@@ -66,12 +61,8 @@ public class UserServiceImpl implements UserService{
         User user = userRepository.findByEmail(email).orElse(null);
 
         if (user != null) {
-
-            if (user.getUserStatus() == SUSPENDED
-                    || user.getUserStatus() == DORMANT
-                    || user.getUserStatus() == DELETED) {
-                throw new AuthException(ACCOUNT_RESTRICTED);
-            }
+            log.info("기존 등록된 유저 확인 - 상태: {}", user.getUserStatus());
+            validateUserStatus(user);
 
             if (user.getUserStatus() == UserStatus.REGISTER) {
                 resultMap.put("isNewMember", true);
@@ -82,6 +73,7 @@ public class UserServiceImpl implements UserService{
             }
 
         } else {
+            log.info("가입되지 않은 신규 유저 - 정보 생성 및 임시 저장 진행");
             User newUser = User.builder()
                     .email(email)
                     .name(name)
@@ -95,7 +87,6 @@ public class UserServiceImpl implements UserService{
                     .build();
 
             userRepository.save(newUser);
-
             resultMap.put("isNewMember", true);
         }
 
@@ -103,73 +94,54 @@ public class UserServiceImpl implements UserService{
     }
 
     /**
+     * 유저의 계정 상태가 서비스 이용 가능한 상태인지 검증합니다.
+     */
+    private void validateUserStatus(User user) {
+        if (user.getUserStatus() == SUSPENDED
+                || user.getUserStatus() == DORMANT
+                || user.getUserStatus() == DELETED) {
+            log.warn("계정 사용 제한 유저 접속 시도 - 이메일: {}, 상태: {}", user.getEmail(), user.getUserStatus());
+            throw new AuthException(ACCOUNT_RESTRICTED);
+        }
+    }
+
+    /**
      * {@inheritDoc}
      * <p>
      * 상세 처리 프로세스:
-     * 1. {@link WebClient}를 통해 구글 프로필 API 호출
-     * 2. 수신된 JSON 응답에서 이메일, 이름, 프로필 이미지 추출
-     * 3. {@code email}을 기준으로 기존 가입 여부 조회
-     * 4. 기존 회원일 경우: 계정 상태(정지/삭제/휴면)를 체크하여 예외 또는 유저 데이터 반환
-     * 5. 신규 회원일 경우: 기본 정보를 {@code User} 엔티티로 생성하여 DB에 저장
+     * 1. 유저 조회 및 'REGISTER' 상태(가입 대기) 검증
+     * 2. 닉네임 중복 여부 확인 (비즈니스 로직)
+     * 3. MyBatis를 통한 정보 업데이트 및 계정 활성화(ACTIVE)
+     * 4. 정회원(USER) 권한의 새로운 Access/Refresh 토큰 발급
+     * <p>
+     * (참고: 입력값의 null/빈값 여부는 컨트롤러단에서 @Valid를 통해 사전에 검증됩니다.)
      *
-     * @throws AuthException 유저 상태가 서비스 이용 제한(SUSPENDED, DORMANT, DELETED)인 경우
+     * @throws UserException 중복 닉네임, 잘못된 상태, 유저를 찾을 수 없는 경우
      */
     @Transactional
     @Override
-    public Map<String, Object> getGoogleUserProfile(String accessToken) {
+    public UserRegisterResponse registerAdditionalInfo(UserRegisterRequest request, String email) {
+        log.info("추가 정보 입력 시작");
 
-        Map response = webClient.get()
-                .uri("https://www.googleapis.com/oauth2/v3/userinfo") // 구글 엔드포인트
-                .header("Authorization", "Bearer " + accessToken)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
-        String email = (String) response.get("email");
-        String name = (String) response.get("name");
-        String profileImage = (String) response.get("picture");
-
-        Map<String, Object> resultMap = new HashMap<>();
-        resultMap.put("email", email);
-        resultMap.put("name", name);
-        resultMap.put("profileUrl", profileImage != null ? profileImage : "");
-
-        User user = userRepository.findByEmail(email).orElse(null);
-
-        if (user != null) {
-
-            if (user.getUserStatus() == SUSPENDED
-                    || user.getUserStatus() == DORMANT
-                    || user.getUserStatus() == DELETED) {
-                throw new AuthException(ACCOUNT_RESTRICTED);
-            }
-
-            if (user.getUserStatus() == UserStatus.REGISTER) {
-                resultMap.put("isNewMember", true);
-            } else {
-                resultMap.put("isNewMember", false);
-                resultMap.put("userId", user.getUsersId());
-                resultMap.put("role", user.getRole().name());
-            }
-
-        } else {
-            User newUser = User.builder()
-                    .email(email)
-                    .name(name)
-                    .profileUrl(profileImage != null ? profileImage : "")
-                    .role(UserRole.USER)
-                    .userStatus(UserStatus.REGISTER)
-                    .userCreatedAt(LocalDateTime.now())
-                    .nickname("")
-                    .region("")
-                    .notificationEnabled(true)
-                    .build();
-
-            userRepository.save(newUser);
-
-            resultMap.put("isNewMember", true);
+        if (user.getUserStatus() != UserStatus.REGISTER) {
+            throw new UserException(INVALID_REQUEST);
         }
 
-        return resultMap;
+        if (userRepository.existsByNickname(request.getNickname())) {
+            throw new UserException(NICKNAME_DUPLICATED);
+        }
+
+        userMapper.updateUserRegistrationInfo(request.toEntity(email));
+
+        String accessToken = jwtTokenProvider.createAccessToken(user.getUsersId(), "USER");
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getUsersId());
+
+        return toDto(user, "회원가입 성공했습니다.",
+                accessToken,
+                refreshToken,
+                jwtTokenProvider.getAccessTokenValidityInMilliseconds());
     }
 }

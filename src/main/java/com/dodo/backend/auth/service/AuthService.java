@@ -12,20 +12,12 @@ import org.springframework.http.ResponseEntity;
 public interface AuthService {
 
     /**
-     * 네이버 인가 코드를 받아 소셜 로그인 로직을 수행합니다.
-     * <p>
-     * 신규 회원이면 추가 정보를 위한 {@code RegistrationToken}을,
-     * 기존 회원이면 서비스 이용을 위한 {@code AccessToken}을 발급합니다.
+     * 소셜 로그인 인증을 수행하고 결과에 따라 로그인 또는 회원가입 응답을 반환합니다.
+     *
+     * @param request provider(GOOGLE/NAVER)와 인가 코드(code)를 포함한 요청 객체
+     * @return
+     * - 기존 회원: 200 OK + Access/Refresh Token <br>
+     * - 신규 회원: 202 Accepted + Registration Token (이메일, 이름 포함)
      */
-    public ResponseEntity<?> socialLogin(AuthRequest.SocialLoginRequest request);
-
-    /**
-     * 네이버 인증 서버와 통신하여 인가 코드를 액세스 토큰으로 교환합니다.
-     */
-    public String getNaverAccessToken(String code);
-
-    /**
-     * 구글 인증 서버와 통신하여 인가 코드를 액세스 토큰으로 교환합니다.
-     */
-    public String getGoogleAccessToken(String code);
+    ResponseEntity<?> socialLogin(AuthRequest.SocialLoginRequest request);
 }

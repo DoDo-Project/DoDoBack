@@ -1,5 +1,6 @@
 package com.dodo.backend.auth.exception;
 
+import com.dodo.backend.common.exception.BaseErrorCode;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
@@ -11,7 +12,7 @@ import org.springframework.http.HttpStatus;
  */
 @AllArgsConstructor
 @Getter
-public enum AuthErrorCode {
+public enum AuthErrorCode implements BaseErrorCode {
 
 
     /**

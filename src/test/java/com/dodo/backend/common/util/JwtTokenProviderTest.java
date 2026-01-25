@@ -4,7 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
+import java.util.Collection;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,17 +38,23 @@ class JwtTokenProviderTest {
 
         // when
         String token = jwtTokenProvider.createAccessToken(userId, role);
+
         UUID extractedUserId = jwtTokenProvider.getUserIdFromToken(token);
-        String extractedRole = jwtTokenProvider.getRoleFromToken(token);
+
+        Authentication auth = jwtTokenProvider.getAuthentication(token);
+        Collection<? extends GrantedAuthority> authorities = auth.getAuthorities();
 
         log.info("Created Access Token: {}", token);
-        log.info("Extracted UserId: {}, Role: {}", extractedUserId, extractedRole);
+        log.info("Extracted UserId: {}", extractedUserId);
+        log.info("Extracted Authorities: {}", authorities);
 
         // then
         assertThat(token).isNotNull();
         assertThat(extractedUserId).isEqualTo(userId);
-        assertThat(extractedRole).isEqualTo(role);
         assertThat(jwtTokenProvider.validateToken(token)).isTrue();
+
+        assertThat(authorities).extracting(GrantedAuthority::getAuthority)
+                .containsExactly("ROLE_" + role);
     }
 
     @Test
@@ -55,17 +65,22 @@ class JwtTokenProviderTest {
 
         // when
         String token = jwtTokenProvider.createRegisterToken(email);
-        String extractedEmail = jwtTokenProvider.getEmailFromToken(token);
-        String extractedRole = jwtTokenProvider.getRoleFromToken(token);
+
+        Authentication auth = jwtTokenProvider.getAuthentication(token);
+        UserDetails userDetails = (UserDetails) auth.getPrincipal();
+        String extractedEmail = userDetails.getUsername();
 
         log.info("Created Register Token: {}", token);
-        log.info("Extracted Email: {}, Role: {}", extractedEmail, extractedRole);
+        log.info("Extracted Email via UserDetails: {}", extractedEmail);
+        log.info("Extracted Authorities: {}", auth.getAuthorities());
 
         // then
         assertThat(token).isNotNull();
         assertThat(extractedEmail).isEqualTo(email);
-        assertThat(extractedRole).isEqualTo("GUEST");
         assertThat(jwtTokenProvider.validateToken(token)).isTrue();
+
+        assertThat(auth.getAuthorities()).extracting(GrantedAuthority::getAuthority)
+                .containsExactly("ROLE_GUEST");
     }
 
     @Test

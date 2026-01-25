@@ -4,9 +4,17 @@ import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.UUID;
 
@@ -84,25 +92,18 @@ public class JwtTokenProvider {
     }
 
     /**
+     * 액세스 토큰의 유효 시간(밀리초)을 반환합니다.
+     */
+    public long getAccessTokenValidityInMilliseconds() {
+        return this.accessTokenValidity;
+    }
+
+    /**
      * 토큰에서 사용자 ID(Subject)를 추출합니다.
      */
     public UUID getUserIdFromToken(String token) {
         String subject = parseClaims(token).getSubject();
         return UUID.fromString(subject);
-    }
-
-    /**
-     * 토큰에서 권한(Role) 정보를 추출합니다.
-     */
-    public String getRoleFromToken(String token) {
-        return parseClaims(token).get("role", String.class);
-    }
-
-    /**
-     * 토큰에서 이메일 정보를 추출합니다.
-     */
-    public String getEmailFromToken(String token) {
-        return parseClaims(token).get("email", String.class);
     }
 
     private Claims parseClaims(String token) {
@@ -133,5 +134,30 @@ public class JwtTokenProvider {
             log.warn("JWT 토큰이 잘못되었습니다.");
         }
         return false;
+    }
+
+    /**
+     * 토큰 정보를 기반으로 Security 인증 객체(Authentication)를 생성합니다.
+     */
+    public Authentication getAuthentication(String token) {
+        Claims claims = parseClaims(token);
+        String principal;
+        String role;
+
+        if ("register-process".equals(claims.getSubject())) {
+            principal = claims.get("email", String.class);
+            role = "ROLE_GUEST";
+        } else {
+            principal = claims.getSubject();
+            role = claims.get("role", String.class);
+        }
+
+        Collection<? extends GrantedAuthority> authorities = (role != null)
+                ? Collections.singletonList(new SimpleGrantedAuthority(role.startsWith("ROLE_") ? role : "ROLE_" + role))
+                : Collections.emptyList();
+
+        UserDetails userDetails = new User(principal, "", authorities);
+
+        return new UsernamePasswordAuthenticationToken(userDetails, token, authorities);
     }
 }

@@ -53,8 +53,8 @@ class UserRepositoryTest {
         // when
         User savedUser = userRepository.save(user);
 
-        log.info("Saved User Info: {}", savedUser);
-        log.info("Saved User ID: {}", savedUser.getUsersId());
+        log.info("저장된 유저 정보: {}", savedUser);
+        log.info("저장된 유저 ID: {}", savedUser.getUsersId());
 
         // then
         assertThat(savedUser.getUsersId()).isNotNull();
@@ -90,7 +90,7 @@ class UserRepositoryTest {
         User foundUser = userRepository.findByEmail("test@naver.com")
                 .orElse(null);
 
-        log.info("Found User Info: {}", foundUser);
+        log.info("찾은 유저 정보: {}", foundUser);
 
         // then
         assertThat(foundUser).isNotNull();
@@ -121,7 +121,7 @@ class UserRepositoryTest {
         User savedUser = userRepository.save(user);
         java.util.UUID targetId = savedUser.getUsersId();
 
-        log.info("Before Delete - User ID: {}, Email: {}", targetId, savedUser.getEmail());
+        log.info("삭제하기 전 - 유저ID: {}, Email: {}", targetId, savedUser.getEmail());
 
         // when
         userRepository.delete(savedUser);
@@ -131,10 +131,48 @@ class UserRepositoryTest {
         boolean isExists = userRepository.existsById(targetId);
         java.util.Optional<User> foundUser = userRepository.findById(targetId);
 
-        log.info("After Delete - Target ID: {}", targetId);
-        log.info("After Delete - Existence Status: {}", isExists);
+        log.info("삭제한 후 - 타겟ID: {}", targetId);
+        log.info("삭제한 후 - 상태: {}", isExists);
 
         assertThat(isExists).isFalse();
         assertThat(foundUser).isEmpty();
+    }
+
+    /**
+     * 닉네임 중복 여부를 확인하는 기능을 검증합니다.
+     * <p>
+     * 존재하는 닉네임에 대해서는 true를, 존재하지 않는 닉네임에 대해서는 false를 반환해야 합니다.
+     */
+    @Test
+    @DisplayName("닉네임 중복 여부 확인 테스트")
+    void existsByNicknameTest() {
+        // given
+        String nickname = "unique_dodo";
+        User user = User.builder()
+                .email("nick_test@test.com")
+                .name("닉네임테스터")
+                .nickname(nickname)
+                .role(UserRole.USER)
+                .userStatus(UserStatus.ACTIVE)
+                .userCreatedAt(LocalDateTime.now())
+                .region("Seoul")
+                .notificationEnabled(true)
+                .profileUrl("")
+                .build();
+
+        userRepository.save(user);
+        userRepository.flush();
+        log.info("테스트용 닉네임 저장 완료: {}", nickname);
+
+        // when
+        boolean exists = userRepository.existsByNickname(nickname);
+        boolean notExists = userRepository.existsByNickname("none_exists_nick");
+
+        log.info("닉네임 '{}' 존재 여부: {}", nickname, exists);
+        log.info("닉네임 'none_exists_nick' 존재 여부: {}", notExists);
+
+        // then
+        assertThat(exists).isTrue();
+        assertThat(notExists).isFalse();
     }
 }

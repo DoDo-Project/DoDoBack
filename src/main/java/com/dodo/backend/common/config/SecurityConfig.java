@@ -1,7 +1,7 @@
 package com.dodo.backend.common.config;
 
-import com.dodo.backend.common.util.JwtAuthenticationFilter;
-import com.dodo.backend.common.util.JwtTokenProvider;
+import com.dodo.backend.common.jwt.JwtAuthenticationFilter;
+import com.dodo.backend.common.jwt.JwtTokenProvider;
 import com.dodo.backend.user.exception.UserErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;

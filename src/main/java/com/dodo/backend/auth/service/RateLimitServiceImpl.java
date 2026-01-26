@@ -107,4 +107,39 @@ public class RateLimitServiceImpl implements RateLimitService {
         String key = AUTH_CODE_PREFIX + email;
         redisTemplate.opsForValue().set(key, code, duration, TimeUnit.MINUTES);
     }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Redis의 {@code opsForValue().get()}을 사용하여 특정 이메일에 매핑된 인증 번호를 조회합니다.
+     * 저장된 데이터가 없거나 만료된 경우 {@code null}을 반환합니다.
+     */
+    @Override
+    public String getVerificationCode(String email) {
+        String key = AUTH_CODE_PREFIX + email;
+        return (String) redisTemplate.opsForValue().get(key);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Redis에서 해당 이메일의 인증 번호 키를 즉시 삭제합니다.
+     * 본인 확인이 완료된 후 불필요한 데이터를 정리하기 위해 호출됩니다.
+     */
+    @Override
+    public void deleteVerificationCode(String email) {
+        String key = AUTH_CODE_PREFIX + email;
+        redisTemplate.delete(key);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Redis에서 해당 이메일의 메일 발송 제한 키를 삭제하여 즉시 재발송이 가능한 상태로 만듭니다.
+     */
+    @Override
+    public void deleteEmailCooldown(String email) {
+        String key = EMAIL_LIMIT_PREFIX + email;
+        redisTemplate.delete(key);
+    }
 }

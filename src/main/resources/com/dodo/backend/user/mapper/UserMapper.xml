@@ -20,4 +20,16 @@
             user_status = 'ACTIVE'
         WHERE email = #{email}
     </update>
+
+    <!-- 사용자의 계정 상태를 'DELETED'로 전환합니다.
+         1. user_status : 삭제를 의미하는 'DELETED' 상태로 변경
+         2. WHERE users_id : 토큰에서 추출한 userId를 기준으로 특정 유저를 식별-->
+    <update id="updateUserStatus">
+        UPDATE users
+        SET
+            user_status = #{status},
+            user_status_updated_at = NOW()
+        WHERE
+            users_id = #{userId}
+    </update>
 </mapper>

@@ -1,4 +1,4 @@
-package com.dodo.backend.common.util;
+package com.dodo.backend.common.jwt;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

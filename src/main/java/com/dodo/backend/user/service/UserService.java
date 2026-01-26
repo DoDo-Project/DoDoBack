@@ -57,4 +57,12 @@ public interface UserService {
      * @param userId 탈퇴 인증을 진행할 사용자의 아이디
      */
     void requestWithdrawal(UUID userId);
+
+    /**
+     * 사용자가 입력한 인증 번호를 검증하고 최종 탈퇴 처리를 수행합니다.
+     *
+     * @param userId   탈퇴를 진행할 유저의 UUID
+     * @param authCode 사용자가 입력한 6자리 인증 번호
+     */
+    void deleteWithdrawal(UUID userId, String authCode);
 }

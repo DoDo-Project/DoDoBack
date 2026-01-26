@@ -3,6 +3,7 @@ package com.dodo.backend.user.controller;
 import com.dodo.backend.auth.dto.response.AuthResponse;
 import com.dodo.backend.user.dto.request.UserRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
+import com.dodo.backend.user.dto.request.UserRequest.WithdrawalRequest;
 import com.dodo.backend.user.dto.response.UserResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.service.UserService;
@@ -94,7 +95,7 @@ public class UserController {
      * @return 성공 메시지 (200 OK)
      */
     @Operation(summary = "탈퇴 인증 이메일 발송",
-            description = "계정 탈퇴 진행을 위해 현재 로그인한 유저의 이메일로 인증 번호를 발송합니다. 1분 이내 재요청이 불가능합니다.")
+            description = "계정 탈퇴 진행을 위해 현재 로그인한 유저의 이메일로 인증 번호를 발송하고 1분 이내 재요청이 불가능합니다.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "인증 이메일 발송에 성공했습니다."),
             @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
@@ -110,5 +111,36 @@ public class UserController {
         userService.requestWithdrawal(userId);
 
         return ResponseEntity.ok("인증 이메일 발송에 성공했습니다.");
+    }
+
+    /**
+     * 계정 탈퇴 확정 및 인증 번호 검증을 수행합니다.
+     * <p>
+     * 이메일로 발송된 6자리 인증 코드를 대조하여 본인 확인이 완료되면,
+     * 사용자의 상태를 'DELETED'로 변경하고 Redis 내 관련 인증 데이터를 정리합니다.
+     *
+     * @param request     사용자가 입력한 6자리 인증 번호가 담긴 DTO
+     * @param userDetails SecurityContext에서 추출한 현재 인증된 사용자 정보
+     * @return 회원 탈퇴 성공 메시지 (200 OK)
+     */
+    @Operation(summary = "최종 회원 탈퇴",
+            description = "발송된 인증 번호를 확인하여 회원 탈퇴를 최종 승인하고 성공 시 계정 상태가 'DELETED'로 변경됩니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "회원 탈퇴에 성공했습니다."),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+    })
+    @DeleteMapping("/me")
+    public ResponseEntity<String> deleteWithdrawal(@RequestBody WithdrawalRequest request,
+                                                   @AuthenticationPrincipal UserDetails userDetails) {
+        UUID userId = UUID.fromString(userDetails.getUsername());
+
+        log.info("최종 탈퇴 요청 - 유저: {}, 코드: {}", userId, request.getAuthCode());
+
+        userService.deleteWithdrawal(userId, request.getAuthCode());
+
+        return ResponseEntity.ok("회원 탈퇴에 성공했습니다.");
     }
 }

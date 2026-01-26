@@ -13,16 +13,16 @@ import java.time.LocalDateTime;
  * <p>
  * 내부 정적 클래스를 통해 회원가입 완료, 정보 조회 등 상황별 응답 DTO를 정의합니다.
  */
+@Schema(description = "유저 관련 response 그룹")
 public class UserResponse {
 
     /**
      * 회원가입 완료 후 클라이언트에게 반환되는 응답 DTO입니다.
-     * <p>
-     * 가입 성공 메시지와 함께 서비스 이용에 필요한 JWT(Access/Refresh) 토큰 정보를 포함합니다.
      */
     @Getter
     @Builder
     @AllArgsConstructor
+    @Schema(description = "회원가입 완료 및 토큰 발급 응답")
     public static class UserRegisterResponse {
 
         @Schema(description = "응답 메시지", example = "회원가입이 완료되었습니다.")
@@ -40,16 +40,6 @@ public class UserResponse {
         @Schema(description = "액세스 토큰 만료 시간 (밀리초 단위)", example = "3600000")
         private Long accessTokenExpiresIn;
 
-        /**
-         * 정적 팩토리 메서드: User 엔티티와 발급된 토큰 정보를 받아 응답 DTO를 생성합니다.
-         *
-         * @param user 엔티티 객체
-         * @param message 응답 메시지
-         * @param accessToken 발급된 액세스 토큰
-         * @param refreshToken 발급된 리프레시 토큰
-         * @param accessTokenExpiresIn 토큰 만료 시간
-         * @return 생성된 {@link UserRegisterResponse} 객체
-         */
         public static UserRegisterResponse toDto(User user, String message, String accessToken, String refreshToken, Long accessTokenExpiresIn) {
             return UserRegisterResponse.builder()
                     .message(message)
@@ -63,12 +53,11 @@ public class UserResponse {
 
     /**
      * 유저의 상세 프로필 정보를 반환하는 응답 DTO입니다.
-     * <p>
-     * 마이페이지 조회 등 유저의 계정 정보와 활동 정보를 전달할 때 사용됩니다.
      */
     @Getter
     @Builder
     @AllArgsConstructor
+    @Schema(description = "유저 상세 정보 조회 응답")
     public static class UserInfoResponse {
 
         @Schema(description = "응답 메시지", example = "유저 정보 조회 성공했습니다.")
@@ -98,13 +87,6 @@ public class UserResponse {
         @Schema(description = "계정 생성일", example = "2025-09-30T14:30:00Z")
         private LocalDateTime userCreatedAt;
 
-        /**
-         * 정적 팩토리 메서드: User 엔티티 정보를 상세 정보 응답 DTO로 변환합니다.
-         *
-         * @param user 엔티티 객체
-         * @param message 응답 메시지
-         * @return 생성된 {@link UserInfoResponse} 객체
-         */
         public static UserInfoResponse toDto(User user, String message) {
             return UserInfoResponse.builder()
                     .message(message)

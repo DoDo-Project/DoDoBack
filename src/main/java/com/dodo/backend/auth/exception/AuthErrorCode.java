@@ -48,7 +48,7 @@ public enum AuthErrorCode implements BaseErrorCode {
      * <p>
      * HTTP {@code 403 Forbidden}을 반환합니다.
      */
-    ACCOUNT_RESTRICTED(HttpStatus.FORBIDDEN, "정지된 계정입니다. 또는 휴면 계정입니다."),
+    ACCOUNT_RESTRICTED(HttpStatus.FORBIDDEN, "정지된 계정 또는 휴면 계정입니다."),
 
     /**
      * 요청한 식별자(ID)에 해당하는 회원을 찾을 수 없을 때 사용합니다.

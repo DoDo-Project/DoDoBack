@@ -7,19 +7,19 @@ import lombok.Getter;
 
 /**
  * 인증(Auth) 도메인 관련 응답 데이터를 그룹화하여 관리하는 클래스입니다.
+ * <p>
+ * 소셜 로그인 성공 여부에 따른 서비스 토큰 발급 또는 신규 가입을 위한 임시 토큰 전달 등 인증 결과에 대한 응답 구조를 정의합니다.
  */
+@Schema(description = "인증 관련 응답 DTO 그룹")
 public class AuthResponse {
 
     /**
      * 소셜 로그인 성공 시(기존 회원) 클라이언트에게 반환하는 응답 DTO입니다.
-     * <p>
-     * 사용 프로세스:
-     * 1. 이메일 조회 결과 이미 가입된 정회원(ACTIVE)임이 확인됨
-     * 2. 서비스 이용이 가능한 Access Token과 Refresh Token을 즉시 발급
      */
     @Getter
     @Builder
     @AllArgsConstructor
+    @Schema(description = "소셜 로그인 성공 응답 (기존 회원)")
     public static class SocialLoginResponse {
 
         @Schema(description = "응답 메시지", example = "로그인이 완료되었습니다.")
@@ -50,15 +50,11 @@ public class AuthResponse {
 
     /**
      * 신규 회원가입 대상자일 경우 반환하는 응답 DTO입니다.
-     * <p>
-     * 사용 프로세스:
-     * 1. 이메일 조회 결과 가입되지 않은 신규 유저임이 확인됨
-     * 2. 추가 정보 입력을 위해 본인 인증용 임시 토큰(registrationToken) 발급
-     * 3. 클라이언트는 이 토큰과 함께 닉네임 등을 입력하여 회원가입 완료 요청
      */
     @Getter
     @Builder
     @AllArgsConstructor
+    @Schema(description = "신규 가입 대상자 응답 (추가 정보 입력 필요)")
     public static class SocialRegisterResponse {
 
         @Schema(description = "응답 메시지", example = "추가 정보가 필요합니다.")

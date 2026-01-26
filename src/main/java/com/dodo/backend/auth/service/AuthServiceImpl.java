@@ -7,7 +7,7 @@ import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
 import com.dodo.backend.auth.entity.RefreshToken;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.auth.repository.RefreshTokenRepository;
-import com.dodo.backend.common.util.JwtTokenProvider;
+import com.dodo.backend.common.jwt.JwtTokenProvider;
 import com.dodo.backend.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -80,8 +80,35 @@ public class UserController {
     public ResponseEntity<UserResponse.UserInfoResponse> getMyInfo(@AuthenticationPrincipal
                                                                        UserDetails userDetails) {
         UUID userId = UUID.fromString(userDetails.getUsername());
-        log.info("유저 정보 조회 요청 - Id{}: {}", userId);
+        log.info("유저 정보 조회 요청 - Id: {}", userId);
         return ResponseEntity.ok(userService.getUserInfo(userId));
     }
 
+    /**
+     * 계정 탈퇴를 위한 본인 인증 메일을 발송합니다.
+     * <p>
+     * 현재 로그인한 사용자의 이메일로 6자리 인증 번호를 발송하며,
+     * 보안을 위해 1분 이내 재요청 시 429 에러를 반환합니다.
+     *
+     * @param userDetails SecurityContext에서 추출한 인증 객체
+     * @return 성공 메시지 (200 OK)
+     */
+    @Operation(summary = "탈퇴 인증 이메일 발송",
+            description = "계정 탈퇴 진행을 위해 현재 로그인한 유저의 이메일로 인증 번호를 발송합니다. 1분 이내 재요청이 불가능합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "인증 이메일 발송에 성공했습니다."),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
+            @ApiResponse(responseCode = "429", description = "1분 후 다시 시도해주세요."),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+    })
+    @PostMapping("/me/withdrawal/email")
+    public ResponseEntity<String> requestWithdrawalEmail(@AuthenticationPrincipal
+                                                             UserDetails userDetails) {
+        UUID userId = UUID.fromString(userDetails.getUsername());
+        log.info("탈퇴 인증 이메일 발송 요청 - Id: {}", userId);
+        userService.requestWithdrawal(userId);
+
+        return ResponseEntity.ok("인증 이메일 발송에 성공했습니다.");
+    }
 }

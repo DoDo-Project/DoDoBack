@@ -54,7 +54,7 @@ public class TestSocialController {
         model.addAttribute("googleUrl", googleUrl);
         model.addAttribute("naverUrl", naverUrl);
 
-        return "login-test";
+        return "login/login-test";
     }
 
     /**
@@ -101,6 +101,6 @@ public class TestSocialController {
             model.addAttribute("error", "로그인 처리 중 서버 오류가 발생했습니다: " + e.getMessage());
         }
 
-        return "login-result";
+        return "login/login-result";
     }
 }

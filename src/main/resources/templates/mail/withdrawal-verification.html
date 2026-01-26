@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>DODO | 계정 탈퇴 인증</title>
+    <style>
+        body {
+            margin: 0; padding: 0;
+            background-color: #f8f9fa;
+        }
+        .wrapper {
+            width: 100%;
+            table-layout: fixed;
+            background-color: #f8f9fa;
+            padding-bottom: 40px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background-color: #ffffff;
+            border-radius: 32px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.05);
+            border: 1px solid #eeeeee;
+        }
+        /* 로그인 페이지와 통일된 그라데이션 헤더 */
+        .header {
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .logo {
+            font-size: 36px;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -1.5px;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .content {
+            padding: 40px 30px;
+            text-align: center;
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            color: #444444;
+        }
+        h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #333333;
+            margin-bottom: 20px;
+        }
+        .description {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        /* 로그인 버튼 스타일을 차용한 인증번호 박스 */
+        .code-box {
+            background-color: #fff5f0;
+            border: 2px solid #fda085;
+            border-radius: 16px;
+            padding: 25px;
+            margin: 30px 0;
+            font-size: 38px;
+            font-weight: 800;
+            color: #ff6b35; /* DODO 로고 색상 */
+            letter-spacing: 8px;
+            display: inline-block;
+            min-width: 200px;
+        }
+        .warning-text {
+            font-size: 13px;
+            color: #ff6b35;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+        .footer {
+            padding: 30px;
+            text-align: center;
+            font-size: 12px;
+            color: #aaaaaa;
+            background-color: #fafafa;
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="container">
+        <div class="header">
+            <h1 class="logo">DODO</h1>
+        </div>
+        <div class="content">
+            <h2>본인 확인 인증번호</h2>
+            <div class="description">
+                안녕하세요. <strong>DODO</strong> 입니다.<br/>
+                요청하신 계정 탈퇴를 진행하기 위해<br/>
+                아래의 인증번호를 입력해 주세요.
+            </div>
+
+            <div class="code-box" th:text="${code}">
+                123456
+            </div>
+
+            <div class="warning-text">
+                ※ 인증번호 유효시간: 5분
+            </div>
+            <p style="font-size: 14px; color: #888; margin-top: 30px;">
+                본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.
+            </p>
+        </div>
+        <div class="footer">
+            <p>DODO Backend | 발신전용 메일입니다.</p>
+            <p>&copy; 2026 DODO. All rights reserved.</p>
+        </div>
+    </div>
+</div>
+</body>
+</html>

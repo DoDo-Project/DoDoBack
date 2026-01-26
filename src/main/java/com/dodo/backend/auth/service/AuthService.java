@@ -22,7 +22,13 @@ public interface AuthService {
     ResponseEntity<?> socialLogin(AuthRequest.SocialLoginRequest request);
 
     /**
-     * 클라이언트 IP를 기반으로 요청 횟수를 제한합니다.
+     * 클라이언트 IP를 기반으로 요청 횟수를 검증하여 비정상적인 접근을 제한합니다.
+     * <p>
+     * 단시간 내에 발생하는 과도한 요청을 감지하고, 시스템 보안 정책에 따라
+     * 일정 시간 동안 해당 IP의 서비스 이용을 차단합니다.
+     *
+     * @param clientIp 요청을 보낸 클라이언트의 IP 주소
+     * @throws com.dodo.backend.auth.exception.AuthException 요청 횟수가 임계치를 초과했거나 차단된 IP일 경우 발생
      */
     void checkRateLimit(String clientIp);
 }

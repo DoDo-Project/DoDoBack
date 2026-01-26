@@ -9,20 +9,20 @@ import lombok.NoArgsConstructor;
 
 /**
  * 인증(Auth) 도메인 관련 요청 데이터를 그룹화하여 관리하는 클래스입니다.
+ * <p>
+ * 소셜 로그인 인가 코드 전달, 토큰 재발급 요청 등 인증 프로세스 전반에서 클라이언트가 서버로 전송하는 데이터를 정의합니다.
  */
+@Schema(description = "인증 관련 요청 DTO 그룹")
 public class AuthRequest {
 
     /**
      * 소셜 로그인 인증을 위해 클라이언트가 전달하는 요청 DTO입니다.
-     * <p>
-     * 사용 프로세스:
-     * 1. 클라이언트가 소셜 인증 서버(Google/Naver)로부터 인가 코드(Code) 발급
-     * 2. 발급된 코드와 제공자 타입(Provider)을 이 객체에 담아 백엔드에 토큰 발급 요청
      */
     @Getter
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    @Schema(description = "소셜 로그인 및 토큰 발급 요청")
     public static class SocialLoginRequest {
 
         @Schema(description = "소셜 제공자 타입 (GOOGLE, NAVER)", example = "GOOGLE")
@@ -33,5 +33,4 @@ public class AuthRequest {
         @NotBlank(message = "code는 필수 값입니다.")
         private String code;
     }
-
 }

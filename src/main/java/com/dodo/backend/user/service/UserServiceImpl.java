@@ -2,7 +2,7 @@ package com.dodo.backend.user.service;
 
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.auth.service.RateLimitService;
-import com.dodo.backend.common.util.JwtTokenProvider;
+import com.dodo.backend.common.jwt.JwtTokenProvider;
 import com.dodo.backend.mail.service.MailService;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
 import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
@@ -164,8 +164,8 @@ public class UserServiceImpl implements UserService {
      * @throws UserException 유저를 찾을 수 없거나({@code USER_NOT_FOUND}),
      * 잘못된 요청(null 식별자 또는 삭제된 유저)인 경우({@code INVALID_REQUEST}) 발생
      */
-    @Override
     @Transactional(readOnly = true)
+    @Override
     public UserInfoResponse getUserInfo(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(USER_NOT_FOUND));
@@ -205,5 +205,34 @@ public class UserServiceImpl implements UserService {
         rateLimitService.setEmailCooldown(user.getEmail());
 
         log.info("인증 메일 발송 및 Redis 저장 완료 - 이메일: {}", user.getEmail());
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 상세 처리 프로세스:
+     * 1. UUID 기반 유저 조회
+     * 2. {@link RateLimitService}를 통해 Redis에 저장된 인증 코드 획득 (getVerificationCode)
+     * 3. 입력값과 대조 후 일치하면 'DELETED' 처리 및 관련 Redis 데이터 삭제
+     */
+    @Transactional
+    @Override
+    public void deleteWithdrawal(UUID userId, String authCode) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
+
+        String savedCode = rateLimitService.getVerificationCode(user.getEmail());
+
+        if (savedCode == null || !savedCode.equals(authCode)) {
+            log.warn("탈퇴 인증 실패 - Id: {}, Email: {}, 입력코드: {}", userId, user.getEmail(), authCode);
+            throw new UserException(INVALID_REQUEST);
+        }
+
+        userMapper.updateUserStatus(userId, UserStatus.DELETED.name());
+
+        rateLimitService.deleteVerificationCode(user.getEmail());
+        rateLimitService.deleteEmailCooldown(user.getEmail());
+
+        log.info("회원 탈퇴 처리 성공 - Id: {}, Email: {}", userId, user.getEmail());
     }
 }

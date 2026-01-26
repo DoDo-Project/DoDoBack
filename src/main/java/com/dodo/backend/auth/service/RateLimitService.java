@@ -69,4 +69,30 @@ public interface RateLimitService {
      * @param duration 코드의 유효 유지 시간 (분 단위)
      */
     void saveVerificationCode(String email, String code, int duration);
+
+    /**
+     * 특정 이메일 주소로 발송되어 저장된 인증 코드를 조회합니다.
+     *
+     * @param email 수신자 이메일 (Key)
+     * @return 저장된 인증 코드 문자열, 만료되었거나 존재하지 않으면 {@code null}
+     */
+    String getVerificationCode(String email);
+
+    /**
+     * 특정 이메일과 관련된 인증 코드 데이터를 Redis에서 즉시 삭제합니다.
+     * <p>
+     * 인증 성공 직후 데이터를 초기화하기 위해 사용됩니다.
+     *
+     * @param email 삭제할 데이터의 기준 이메일 주소
+     */
+    void deleteVerificationCode(String email);
+
+    /**
+     * 특정 이메일 주소에 적용된 메일 발송 쿨타임(1분)을 즉시 해제합니다.
+     * <p>
+     * 본인 인증이 성공적으로 완료되었을 때, 남아있는 발송 제한을 초기화하기 위해 사용됩니다.
+     *
+     * @param email 쿨타임을 해제할 이메일 주소
+     */
+    void deleteEmailCooldown(String email);
 }

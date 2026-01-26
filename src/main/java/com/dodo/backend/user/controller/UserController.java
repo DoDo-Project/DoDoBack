@@ -2,6 +2,7 @@ package com.dodo.backend.user.controller;
 
 import com.dodo.backend.auth.dto.response.AuthResponse;
 import com.dodo.backend.user.dto.request.UserRequest;
+import com.dodo.backend.user.dto.request.UserRequest.NotificationUpdateRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserUpdateRequest;
 import com.dodo.backend.user.dto.request.UserRequest.WithdrawalRequest;
@@ -76,7 +77,7 @@ public class UserController {
                     content = @Content(schema = @Schema(implementation = UserResponse.UserInfoResponse.class))),
             @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
             @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
-            @ApiResponse(responseCode = "403", description = "사용자를 찾을 수 없습니다."),
+            @ApiResponse(responseCode = "403", description = "접근 권한이 없습니다."),
             @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
             @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
     })
@@ -178,5 +179,31 @@ public class UserController {
         log.info("유저 정보 수정 요청 - Id: {}, 변경 필드: {}", userId, request);
 
         return ResponseEntity.ok(userService.updateUserInfo(userId, request));
+    }
+
+    /**
+     * 현재 로그인한 사용자의 알림 수신 여부를 변경합니다.
+     *
+     * @param request     변경할 알림 설정 값이 담긴 요청 DTO
+     * @param userDetails SecurityContext에서 추출한 현재 인증된 사용자 정보
+     * @return 설정 변경 성공 메시지 (200 OK)
+     */
+    @Operation(summary = "알림 수신 여부 변경", description = "유저의 알림 설정(ON/OFF)을 변경합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "알림 수신 설정을 성공적으로 변경했습니다."),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+    })
+    @PatchMapping("/me/setting/notification")
+    public ResponseEntity<String> updateNotification(
+            @Valid @RequestBody NotificationUpdateRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        UUID userId = UUID.fromString(userDetails.getUsername());
+        userService.updateNotification(userId, request.getNotificationEnabled());
+
+        return ResponseEntity.ok("알림 수신 설정을 성공적으로 변경했습니다.");
     }
 }

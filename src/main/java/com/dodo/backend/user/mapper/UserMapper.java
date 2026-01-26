@@ -44,4 +44,12 @@ public interface UserMapper {
      * @param user 변경할 데이터가 담긴 유저 엔티티 객체
      */
     void updateUserProfileInfo(User user);
+
+    /**
+     * 특정 유저의 알림 수신 설정(notification_enabled) 상태 값을 변경합니다.
+     *
+     * @param userId  상태를 변경할 유저의 고유 식별자 (UUID)
+     * @param enabled 변경하고자 하는 알림 수신 여부 (true/false)
+     */
+    void updateNotificationStatus(@Param("userId") UUID userId, @Param("enabled") boolean enabled);
 }

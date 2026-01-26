@@ -281,4 +281,24 @@ public class UserServiceImpl implements UserService {
                 request.getHasFamily() != null ? request.getHasFamily() : user.getHasFamily()
         );
     }
+
+
+    /**
+     * 사용자의 알림 수신 설정(ON/OFF)을 변경합니다.
+     * <p>
+     * 1. 사용자 조회: 전달받은 userId로 DB에 유저가 존재하는지 확인합니다.
+     * 2. 예외 처리: 유저가 존재하지 않을 경우 USER_NOT_FOUND 예외를 발생시킵니다.
+     * 3. 정보 갱신: MyBatis 매퍼를 호출하여 해당 유저의 notification_enabled 컬럼 값을 업데이트합니다.
+     *
+     * @param userId  설정을 변경할 사용자의 고유 식별자(UUID)
+     * @param enabled 변경할 알림 수신 여부 (true: 수신 허용, false: 수신 거부)
+     */
+    @Transactional
+    @Override
+    public void updateNotification(UUID userId, Boolean enabled) {
+        userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
+
+        userMapper.updateNotificationStatus(userId, enabled);
+    }
 }

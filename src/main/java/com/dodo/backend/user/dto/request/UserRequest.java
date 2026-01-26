@@ -99,4 +99,15 @@ public class UserRequest {
         @Schema(description = "변경할 가족 여부 (선택)", example = "false")
         private Boolean hasFamily;
     }
+
+    @Getter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Schema(description = "알림 수신 여부 변경 요청")
+    public static class NotificationUpdateRequest {
+
+        @Schema(description = "변경할 알림 수신 여부 (true: 수신, false: 거부)", example = "false")
+        @NotNull(message = "알림 설정 값은 필수입니다.")
+        private Boolean notificationEnabled;
+    }
 }

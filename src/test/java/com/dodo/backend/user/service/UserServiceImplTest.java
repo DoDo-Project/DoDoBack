@@ -289,6 +289,65 @@ class UserServiceImplTest {
         }
     }
 
+    /**
+     * 유저의 알림 수신 설정 변경 기능({@link UserService#updateNotification})을 검증하는 내부 테스트 클래스입니다.
+     */
+    @Nested
+    @DisplayName("알림 수신 설정 변경 테스트")
+    class UpdateNotificationTest {
+
+        /**
+         * 정상적인 유저의 알림 수신 여부 값을 변경(ON -> OFF)하고, DB에 올바르게 반영되는지 검증합니다.
+         * <p>
+         * 1. Given: 알림 설정이 켜져있는(ON) 상태의 테스트 유저를 생성 및 저장합니다.
+         * 2. When: 해당 유저의 식별자로 알림 끄기(OFF) 요청을 보냅니다.
+         * 3. Then: DB에서 유저를 다시 조회하여 {@code notificationEnabled} 값이 false로 변경되었는지 확인합니다.
+         */
+        @Test
+        @DisplayName("알림 수신 여부를 ON -> OFF로 성공적으로 변경")
+        void updateNotificationSuccessTest() {
+            // given
+            User user = createTestUser("notify@test.com", UserStatus.ACTIVE);
+            userRepository.save(user);
+            em.flush();
+            em.clear();
+            log.info("알림 설정 변경 테스트 시작 (True -> False)");
+
+            // when
+            userService.updateNotification(user.getUsersId(), false);
+
+            // then
+            em.flush();
+            em.clear();
+            User updatedUser = userRepository.findById(user.getUsersId()).orElseThrow();
+            assertThat(updatedUser.getNotificationEnabled()).isFalse();
+            log.info("알림 설정 변경(OFF) DB 반영 확인 완료");
+        }
+
+        /**
+         * 존재하지 않는 유저 ID로 설정을 변경하려 할 때, 예외가 적절히 발생하는지 검증합니다.
+         * <p>
+         * 1. Given: 임의의 생성된 UUID(DB에 없음)를 준비합니다.
+         * 2. When: 해당 ID로 설정 변경을 시도합니다.
+         * 3. Then: {@link UserException}이 발생하고, 에러 코드가 {@link UserErrorCode#USER_NOT_FOUND}인지 확인합니다.
+         */
+        @Test
+        @DisplayName("존재하지 않는 유저의 설정을 변경하려 하면 예외 발생")
+        void updateNotificationUserNotFoundTest() {
+            // given
+            UUID nonExistentUserId = UUID.randomUUID();
+            log.info("존재하지 않는 유저 알림 변경 테스트 시작");
+
+            // when & then
+            UserException exception = assertThrows(UserException.class, () -> {
+                userService.updateNotification(nonExistentUserId, false);
+            });
+
+            assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND);
+            log.info("존재하지 않는 유저 예외 발생 확인 완료");
+        }
+    }
+
     private User createTestUser(String email, UserStatus status) {
         return User.builder()
                 .email(email)

@@ -3,6 +3,7 @@ package com.dodo.backend.user.service;
 import com.dodo.backend.auth.exception.AuthErrorCode;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
+import com.dodo.backend.user.dto.response.UserResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.entity.User;
 import com.dodo.backend.user.entity.UserRole;
@@ -244,6 +245,79 @@ class UserServiceImplTest {
             });
 
             log.info("잘못된 상태 접근 예외 발생 확인: {}", exception.getErrorCode());
+            assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    @Nested
+    @DisplayName("유저 정보 조회 테스트 (getMyInfo)")
+    class GetMyInfoTest {
+
+        /**
+         * 존재하는 ACTIVE 유저의 UUID로 조회 시, 올바른 DTO 정보가 반환되어야 합니다.
+         */
+        @Test
+        @DisplayName("성공: 존재하는 유저 정보 조회 시 상세 정보 반환")
+        void getMyInfoSuccessTest() {
+            // given
+            String email = "me@test.com";
+            User user = createTestUser(email, UserStatus.ACTIVE);
+            userRepository.save(user);
+
+            em.flush();
+            em.clear();
+
+            log.info("조회 대상 유저 저장 완료 - UUID: {}", user.getUsersId());
+
+            // when
+            UserResponse.UserInfoResponse response = userService.getUserInfo(user.getUsersId());
+            log.info("조회된 유저 닉네임: {}", response.getNickname());
+
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getEmail()).isEqualTo(email);
+            assertThat(response.getNickname()).isEqualTo(user.getNickname());
+
+            log.info("유저 정보 일치 확인 완료.");
+        }
+
+        /**
+         * DB에 존재하지 않는 UUID로 조회 시, UserException(USER_NOT_FOUND)이 발생해야 합니다.
+         */
+        @Test
+        @DisplayName("실패: 존재하지 않는 유저 ID로 조회 시 UserException 발생")
+        void getMyInfoNotFoundTest() {
+            // given
+            java.util.UUID randomId = java.util.UUID.randomUUID();
+            log.info("존재하지 않는 랜덤 ID로 조회 시도: {}", randomId);
+
+            // when & then
+            UserException exception = assertThrows(UserException.class, () -> {
+                userService.getUserInfo(randomId);
+            });
+
+            log.info("예외 발생 확인: {}", exception.getErrorCode());
+            assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+
+        /**
+         * 상태가 DELETED인 유저를 조회하려고 할 때, 비즈니스 로직에 따라 차단이 필요한 경우 예외를 발생시킵니다.
+         */
+        @Test
+        @DisplayName("실패: 삭제된(DELETED) 계정 조회 시 UserException 발생")
+        void getMyInfoDeletedUserTest() {
+            // given
+            String email = "deleted@test.com";
+            User deletedUser = createTestUser(email, UserStatus.DELETED);
+            userRepository.save(deletedUser);
+            log.info("삭제된(DELETED) 상태의 유저 저장 완료: {}", deletedUser.getUsersId());
+
+            // when & then
+            UserException exception = assertThrows(UserException.class, () -> {
+                userService.getUserInfo(deletedUser.getUsersId());
+            });
+
+            log.info("삭제된 유저 접근 예외 발생 확인: {}", exception.getErrorCode());
             assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.INVALID_REQUEST);
         }
     }

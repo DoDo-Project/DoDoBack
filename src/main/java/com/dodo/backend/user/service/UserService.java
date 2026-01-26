@@ -1,11 +1,16 @@
 package com.dodo.backend.user.service;
 
+import com.dodo.backend.user.dto.request.UserRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
+import com.dodo.backend.user.dto.response.UserResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
+import com.dodo.backend.user.dto.response.UserResponse.UserUpdateResponse;
 
 import java.util.Map;
 import java.util.UUID;
+
+import static com.dodo.backend.user.dto.request.UserRequest.*;
 
 /**
  * 사용자 정보 관리 및 회원 관련 비즈니스 로직을 담당하는 서비스 인터페이스입니다.
@@ -65,4 +70,17 @@ public interface UserService {
      * @param authCode 사용자가 입력한 6자리 인증 번호
      */
     void deleteWithdrawal(UUID userId, String authCode);
+
+    /**
+     * 기존 사용자의 프로필 정보(닉네임, 지역, 가족 여부)를 수정합니다.
+     * <p>
+     * 변경을 원하는 항목만 선택적으로 업데이트할 수 있으며,
+     * 닉네임 변경 시 시스템 내 중복 여부를 사전에 검증합니다.
+     *
+     * @param userId  정보를 수정할 사용자의 고유 ID
+     * @param request 수정할 항목들이 담긴 DTO 객체
+     * @return 수정이 완료된 후의 최신 사용자 정보 응답 DTO
+     */
+    UserUpdateResponse updateUserInfo(UUID userId, UserUpdateRequest request);
+
 }

@@ -3,9 +3,11 @@ package com.dodo.backend.user.controller;
 import com.dodo.backend.auth.dto.response.AuthResponse;
 import com.dodo.backend.user.dto.request.UserRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
+import com.dodo.backend.user.dto.request.UserRequest.UserUpdateRequest;
 import com.dodo.backend.user.dto.request.UserRequest.WithdrawalRequest;
 import com.dodo.backend.user.dto.response.UserResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
+import com.dodo.backend.user.dto.response.UserResponse.UserUpdateResponse;
 import com.dodo.backend.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -56,6 +58,7 @@ public class UserController {
     @PutMapping("/me/profile")
     public ResponseEntity<UserRegisterResponse> completeRegistration(@Valid @RequestBody UserRegisterRequest request,
                                                                      @AuthenticationPrincipal UserDetails userDetails) {
+
         String email = userDetails.getUsername();
         log.info("회원가입 추가 정보 입력 요청 - 이메일: {}", email);
         return ResponseEntity.ok(userService.registerAdditionalInfo(request, email));
@@ -80,8 +83,10 @@ public class UserController {
     @GetMapping("/me")
     public ResponseEntity<UserResponse.UserInfoResponse> getMyInfo(@AuthenticationPrincipal
                                                                        UserDetails userDetails) {
+
         UUID userId = UUID.fromString(userDetails.getUsername());
         log.info("유저 정보 조회 요청 - Id: {}", userId);
+
         return ResponseEntity.ok(userService.getUserInfo(userId));
     }
 
@@ -135,12 +140,43 @@ public class UserController {
     @DeleteMapping("/me")
     public ResponseEntity<String> deleteWithdrawal(@RequestBody WithdrawalRequest request,
                                                    @AuthenticationPrincipal UserDetails userDetails) {
+
         UUID userId = UUID.fromString(userDetails.getUsername());
-
         log.info("최종 탈퇴 요청 - 유저: {}, 코드: {}", userId, request.getAuthCode());
-
         userService.deleteWithdrawal(userId, request.getAuthCode());
 
         return ResponseEntity.ok("회원 탈퇴에 성공했습니다.");
+    }
+
+    /**
+     * 현재 로그인한 사용자의 프로필 정보(닉네임, 지역, 가족 여부)를 수정합니다.
+     * <p>
+     * 변경을 원하는 필드만 선택적으로 전송할 수 있으며,
+     * 닉네임 수정 시 기존 데이터와 중복 여부를 검증합니다.
+     *
+     * @param request     수정할 정보가 담긴 DTO (nickname, region, hasFamily)
+     * @param userDetails SecurityContext에서 추출한 현재 인증된 사용자 정보
+     * @return 수정된 최신 사용자 정보 및 성공 메시지 (200 OK)
+     */
+    @Operation(summary = "내 정보 수정",
+            description = "닉네임, 지역, 가족 여부 등 내 프로필 정보를 선택적으로 수정합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "프로필 수정에 성공했습니다.",
+                    content = @Content(schema = @Schema(implementation = UserUpdateResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
+            @ApiResponse(responseCode = "409", description = "이미 사용중인 닉네임입니다."),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+    })
+    @PatchMapping("/me")
+    public ResponseEntity<UserUpdateResponse> updateMyInfo(
+            @Valid @RequestBody UserUpdateRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        UUID userId = UUID.fromString(userDetails.getUsername());
+        log.info("유저 정보 수정 요청 - Id: {}, 변경 필드: {}", userId, request);
+
+        return ResponseEntity.ok(userService.updateUserInfo(userId, request));
     }
 }

@@ -4,6 +4,7 @@ import com.dodo.backend.user.entity.User;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,10 +31,13 @@ public class UserRequest {
 
         @Schema(description = "유저 닉네임", example = "강력한 개발자")
         @NotBlank(message = "닉네임은 필수입니다.")
+        @Size(min = 2, max = 10, message = "닉네임은 2자 이상 10자 이하여야 합니다.")
+        @Pattern(regexp = "^[가-힣a-zA-Z0-9]*$", message = "닉네임은 한글, 영문, 숫자만 가능합니다.")
         private String nickname;
 
         @Schema(description = "활동 지역", example = "서울시 동대문구")
         @NotBlank(message = "지역 정보는 필수입니다.")
+        @Size(max = 50, message = "지역 정보가 너무 깁니다.")
         private String region;
 
         @Schema(description = "가족 여부", example = "true")
@@ -66,5 +70,33 @@ public class UserRequest {
         @NotBlank(message = "인증 번호는 필수입니다.")
         @Size(min = 6, max = 6, message = "인증 번호는 6자리여야 합니다.")
         private String authCode;
+    }
+
+    /**
+     * 기존 사용자 정보를 수정하기 위한 요청 DTO입니다.
+     * <p>
+     * 닉네임, 활동 지역, 가족 여부 중 변경을 원하는 필드만 선택적으로 전송할 수 있습니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Schema(description = "유저 정보 수정 요청")
+    public static class UserUpdateRequest {
+
+        /** 변경하고자 하는 새로운 닉네임 (변경 시에만 포함) */
+        @Schema(description = "변경할 닉네임 (선택)", example = "김길자")
+        @Size(min = 2, max = 10, message = "닉네임은 2자 이상 10자 이하여야 합니다.")
+        @Pattern(regexp = "^[가-힣a-zA-Z0-9]*$", message = "닉네임은 한글, 영문, 숫자만 가능합니다.")
+        private String nickname;
+
+        /** 변경하고자 하는 새로운 활동 지역 (변경 시에만 포함) */
+        @Schema(description = "변경할 활동 지역 (선택)", example = "부산시 해운대구")
+        @Size(max = 50, message = "지역 정보가 너무 깁니다.")
+        private String region;
+
+        /** 변경하고자 하는 새로운 가족 여부 (변경 시에만 포함) */
+        @Schema(description = "변경할 가족 여부 (선택)", example = "false")
+        private Boolean hasFamily;
     }
 }

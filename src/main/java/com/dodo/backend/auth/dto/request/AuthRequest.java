@@ -33,4 +33,19 @@ public class AuthRequest {
         @NotBlank(message = "code는 필수 값입니다.")
         private String code;
     }
+
+    /**
+     * 로그아웃 요청 시 리프레시 토큰을 전달받는 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Schema(description = "로그아웃 요청")
+    public static class LogoutRequest {
+
+        @Schema(description = "삭제할 리프레시 토큰", example = "def50200f29184b294277418292...")
+        @NotBlank(message = "리프레시 토큰은 필수 값입니다.")
+        private String refreshToken;
+    }
 }

@@ -160,4 +160,14 @@ public class JwtTokenProvider {
 
         return new UsernamePasswordAuthenticationToken(userDetails, token, authorities);
     }
+
+    /**
+     * 토큰의 남은 유효 시간(밀리초)을 반환합니다.
+     * 블랙리스트 처리 시 Redis TTL 설정을 위해 사용됩니다.
+     */
+    public long getRemainingValidTime(String token) {
+        Date expiration = parseClaims(token).getExpiration();
+        long now = new Date().getTime();
+        return expiration.getTime() - now;
+    }
 }

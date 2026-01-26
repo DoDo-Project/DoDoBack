@@ -40,7 +40,7 @@ public class UserRequest {
         @Size(max = 50, message = "지역 정보가 너무 깁니다.")
         private String region;
 
-        @Schema(description = "가족 여부", example = "true")
+        @Schema(description = "가족 여부 (true: 있다, false: 없다)", example = "true")
         @NotNull(message = "가족 여부는 필수입니다.")
         private Boolean hasFamily;
 
@@ -91,12 +91,12 @@ public class UserRequest {
         private String nickname;
 
         /** 변경하고자 하는 새로운 활동 지역 (변경 시에만 포함) */
-        @Schema(description = "변경할 활동 지역 (선택)", example = "부산시 해운대구")
+        @Schema(description = "변경할 활동 지역 (선택) ", example = "부산시 해운대구")
         @Size(max = 50, message = "지역 정보가 너무 깁니다.")
         private String region;
 
         /** 변경하고자 하는 새로운 가족 여부 (변경 시에만 포함) */
-        @Schema(description = "변경할 가족 여부 (선택)", example = "false")
+        @Schema(description = "변경할 가족 여부 (선택 true: 있다, false: 없다)", example = "false")
         private Boolean hasFamily;
     }
 

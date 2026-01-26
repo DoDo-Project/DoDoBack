@@ -1,5 +1,7 @@
 package com.dodo.backend.auth.controller;
 
+import com.dodo.backend.auth.dto.request.AuthRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
@@ -62,5 +64,38 @@ public class AuthController {
         authService.checkRateLimit(clientIp);
 
         return authService.socialLogin(request);
+    }
+
+    /**
+     * 사용자의 리프레시 토큰을 만료시키고, 현재 사용 중인 액세스 토큰을 블랙리스트에 등록하여 로그아웃을 처리합니다.
+     * <p>
+     * 1. 전달받은 <b>리프레시 토큰</b>을 Redis에서 삭제하여 토큰 재발급을 차단합니다.<br>
+     * 2. 헤더에서 추출한 <b>액세스 토큰</b>을 Redis 블랙리스트에 등록하여, 남은 유효 기간 동안의 접근을 즉시 무효화합니다.
+     *
+     * @param request     로그아웃할 리프레시 토큰이 담긴 요청 DTO
+     * @param httpRequest Authorization 헤더에서 액세스 토큰을 추출하기 위한 요청 객체
+     * @return 로그아웃 성공 여부 메시지
+     */
+    @Operation(summary = "소셜 로그아웃", description = "Refresh Token 삭제 및 Access Token 블랙리스트 처리를 통해 안전하게 로그아웃합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "로그아웃 되었습니다."),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
+            @ApiResponse(responseCode = "401", description = "인증 정보가 유효하지 않습니다."),
+            @ApiResponse(responseCode = "404", description = "로그인 정보를 찾을 수 없습니다."),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+    })
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(@RequestBody @Valid LogoutRequest request,
+                                         HttpServletRequest httpRequest) {
+
+        String bearerToken = httpRequest.getHeader("Authorization");
+        String accessToken = null;
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            accessToken = bearerToken.substring(7);
+        }
+
+        authService.logout(request, accessToken);
+
+        return ResponseEntity.ok("로그아웃 되었습니다.");
     }
 }

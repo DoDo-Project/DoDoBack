@@ -8,8 +8,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
@@ -23,8 +25,9 @@ import java.util.Map;
 /**
  * 애플리케이션의 보안 관련 설정을 담당하는 구성 클래스입니다.
  * <p>
- * Spring Security를 활성화하며, JWT 인증 필터 등록 및 세션 정책(Stateless)을 설정합니다.
- * 필터 단계에서 발생하는 예외를 {@link com.dodo.backend.common.exception.ErrorResponse} 포맷에 맞춰 처리합니다.
+ * Spring Security를 활성화하여 웹 요청에 대한 인증 및 인가 규칙을 정의합니다.
+ * JWT 기반 인증을 위한 필터를 등록하고, 세션 정책을 Stateless로 설정합니다.
+ * 또한 인증/인가 실패 시 발생하는 예외를 커스텀 에러 응답 포맷으로 변환하여 클라이언트에게 반환합니다.
  */
 @Configuration
 @EnableWebSecurity
@@ -33,18 +36,25 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final ObjectMapper objectMapper;
+    private final RedisTemplate<String, Object> redisTemplate; // RedisTemplate 주입 추가
 
     /**
-     * HTTP 요청에 대한 보안 필터 체인을 구성합니다.
+     * HTTP 요청에 대한 보안 필터 체인(Security Filter Chain)을 구성합니다.
+     * <p>
+     * 1. CSRF 보호 비활성화 (JWT 사용)<br>
+     * 2. 세션 관리 정책을 STATELESS로 설정<br>
+     * 3. API 엔드포인트별 접근 권한 설정 (로그인/문서 등은 허용, 그 외는 인증 필요)<br>
+     * 4. 커스텀 예외 핸들링(AuthenticationEntryPoint, AccessDeniedHandler) 등록<br>
+     * 5. UsernamePasswordAuthenticationFilter 앞단에 JwtAuthenticationFilter 추가
      *
      * @param http HttpSecurity 객체
      * @return 구성된 SecurityFilterChain 인스턴스
-     * @throws Exception 보안 구성 예외
+     * @throws Exception 보안 구성 중 오류 발생 시
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
@@ -68,7 +78,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler())
                 )
                 .addFilterBefore(
-                        new JwtAuthenticationFilter(jwtTokenProvider),
+                        new JwtAuthenticationFilter(jwtTokenProvider, redisTemplate),
                         UsernamePasswordAuthenticationFilter.class
                 );
 
@@ -76,7 +86,9 @@ public class SecurityConfig {
     }
 
     /**
-     * 인증되지 않은 사용자가 보호된 리소스에 접근했을 때 401 에러를 반환하는 엔드포인트를 정의합니다.
+     * 인증되지 않은 사용자(비로그인, 유효하지 않은 토큰 등)가 보호된 리소스에 접근했을 때 처리할 핸들러를 정의합니다.
+     * <p>
+     * 401 Unauthorized 상태 코드와 함께 {@link UserErrorCode#LOGIN_REQUIRED} 에러 정보를 JSON으로 반환합니다.
      *
      * @return AuthenticationEntryPoint 인스턴스
      */
@@ -87,7 +99,9 @@ public class SecurityConfig {
     }
 
     /**
-     * 인가 권한이 없는 사용자가 보호된 리소스에 접근했을 때 403 에러를 반환하는 핸들러를 정의합니다.
+     * 인증은 되었으나 해당 리소스에 대한 접근 권한이 없는 사용자가 접근했을 때 처리할 핸들러를 정의합니다.
+     * <p>
+     * 403 Forbidden 상태 코드와 함께 {@link UserErrorCode#ACCESS_DENIED} 에러 정보를 JSON으로 반환합니다.
      *
      * @return AccessDeniedHandler 인스턴스
      */
@@ -98,11 +112,11 @@ public class SecurityConfig {
     }
 
     /**
-     * ErrorResponse 포맷에 맞춰 클라이언트에게 JSON 응답을 전송합니다.
+     * 필터 레벨에서 발생한 예외에 대해 공통된 에러 응답 포맷(JSON)을 작성하여 클라이언트로 전송합니다.
      *
-     * @param response HTTP 응답 객체
-     * @param errorCode 전송할 유저 에러 코드
-     * @throws IOException 입출력 예외
+     * @param response   HTTP 응답 객체
+     * @param errorCode  클라이언트에게 전달할 에러 코드 정보 (UserErrorCode)
+     * @throws IOException 입출력 처리 중 오류 발생 시
      */
     private void sendErrorResponse(HttpServletResponse response, UserErrorCode errorCode) throws IOException {
         response.setContentType("application/json;charset=UTF-8");

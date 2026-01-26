@@ -1,6 +1,7 @@
 package com.dodo.backend.auth.service;
 
 import com.dodo.backend.auth.dto.request.AuthRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
 import org.springframework.http.ResponseEntity;
 
 /**
@@ -31,4 +32,13 @@ public interface AuthService {
      * @throws com.dodo.backend.auth.exception.AuthException 요청 횟수가 임계치를 초과했거나 차단된 IP일 경우 발생
      */
     void checkRateLimit(String clientIp);
+
+    /**
+     * 로그아웃을 수행합니다.
+     * Refresh Token 삭제 및 Access Token 블랙리스트 처리를 수행합니다.
+     *
+     * @param request 로그아웃할 리프레시 토큰 DTO
+     * @param accessToken 현재 사용 중인 액세스 토큰 (Header에서 추출)
+     */
+    void logout(LogoutRequest request, String accessToken);
 }

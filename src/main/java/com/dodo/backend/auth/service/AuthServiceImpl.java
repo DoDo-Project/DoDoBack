@@ -1,6 +1,8 @@
 package com.dodo.backend.auth.service;
 
 import com.dodo.backend.auth.client.SocialApiClient;
+import com.dodo.backend.auth.dto.request.AuthRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
@@ -11,15 +13,17 @@ import com.dodo.backend.common.jwt.JwtTokenProvider;
 import com.dodo.backend.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
-import static com.dodo.backend.auth.exception.AuthErrorCode.INVALID_REQUEST;
-import static com.dodo.backend.auth.exception.AuthErrorCode.TOO_MANY_REQUESTS;
+import static com.dodo.backend.auth.exception.AuthErrorCode.*;
 
 /**
  * {@link AuthService}의 구현체로, 전략 패턴(Strategy Pattern)을 사용하여 소셜 로그인을 처리합니다.
@@ -34,6 +38,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final RateLimitService rateLimitService;
     private final List<SocialApiClient> socialApiClients;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -121,6 +126,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public void checkRateLimit(String clientIp) {
+
         if (rateLimitService.isIpBanned(clientIp)) {
             log.warn("차단된 IP의 접근 시도 차단 - IP: {}", clientIp);
             throw new AuthException(TOO_MANY_REQUESTS);
@@ -134,5 +140,33 @@ public class AuthServiceImpl implements AuthService {
             rateLimitService.deleteAttempts(clientIp);
             throw new AuthException(TOO_MANY_REQUESTS);
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 상세 처리 프로세스:
+     * 1. 요청받은 Refresh Token을 이용해 Redis에서 저장된 토큰 정보를 조회합니다.
+     * 2. 토큰이 존재하지 않을 경우 {@code TOKEN_NOT_FOUND} 예외를 발생시킵니다.
+     * 3. 토큰이 존재하면 Redis에서 해당 데이터를 삭제하여 재발급을 불가능하게 만듭니다.
+     */
+    @Transactional
+    @Override
+    public void logout(LogoutRequest request, String accessToken) {
+
+        log.info("로그아웃 요청 수신");
+
+        RefreshToken refreshToken = refreshTokenRepository.findByRefreshToken(request.getRefreshToken())
+                .orElseThrow(() -> new AuthException(TOKEN_NOT_FOUND));
+        refreshTokenRepository.delete(refreshToken);
+
+        long expiration = jwtTokenProvider.getRemainingValidTime(accessToken);
+        if (expiration > 0) {
+            redisTemplate.opsForValue()
+                    .set("blacklist:" + accessToken, "logout", expiration, TimeUnit.MILLISECONDS);
+            log.info("Access Token 블랙리스트 등록 완료 (남은 시간: {}ms)", expiration);
+        }
+
+        log.info("로그아웃 완료 - User ID: {}", refreshToken.getUsersId());
     }
 }

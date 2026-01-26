@@ -1,7 +1,9 @@
 package com.dodo.backend.user.service;
 
 import com.dodo.backend.auth.exception.AuthException;
+import com.dodo.backend.auth.service.RateLimitService;
 import com.dodo.backend.common.util.JwtTokenProvider;
+import com.dodo.backend.mail.service.MailService;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
 import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
@@ -40,6 +42,8 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final JwtTokenProvider jwtTokenProvider;
+    private final MailService mailService;
+    private final RateLimitService rateLimitService;
 
     /**
      * {@inheritDoc}
@@ -171,5 +175,35 @@ public class UserServiceImpl implements UserService {
         }
 
         return UserInfoResponse.toDto(user, "유저 정보 조회 성공했습니다.");
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 상세 처리 프로세스:
+     * 1. 시스템 내부의 {@link MailService}를 호출하여 탈퇴 인증 번호 발송을 요청
+     * 2. 별도의 예외 처리를 수행하지 않으며, 발송 중 발생하는 기술적 예외는
+     * 전역 예외 핸들러({@link com.dodo.backend.common.exception.GlobalExceptionHandler})에 의해 {@code INTERNAL_SERVER_ERROR}로 처리
+     *
+     * @param userId 탈퇴 인증을 진행할 사용자의 Id
+     */
+    @Override
+    public void requestWithdrawal(UUID userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
+
+        log.info("사용자 탈퇴 인증 메일 발송 시작 - 대상: {}", user.getEmail());
+
+        if (rateLimitService.isEmailCooldownActive(user.getEmail())) {
+            log.warn("이메일 발송 제한 (1분 미경과) - Email: {}", user.getEmail());
+            throw new UserException(TOO_MANY_REQUESTS);
+        }
+
+        String verificationCode = mailService.sendWithdrawalEmail(user.getEmail());
+        rateLimitService.saveVerificationCode(user.getEmail(), verificationCode, 5);
+        rateLimitService.setEmailCooldown(user.getEmail());
+
+        log.info("인증 메일 발송 및 Redis 저장 완료 - 이메일: {}", user.getEmail());
     }
 }

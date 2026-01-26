@@ -1,6 +1,5 @@
 package com.dodo.backend.auth.service;
 
-import com.dodo.backend.auth.exception.AuthException;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,18 +13,16 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.util.concurrent.TimeUnit;
 
-import static com.dodo.backend.auth.exception.AuthErrorCode.TOO_MANY_REQUESTS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
 /**
- * {@link RateLimitServiceImpl}의 비즈니스 로직을 검증하기 위한 단위 테스트 클래스입니다.
+ * {@link RateLimitServiceImpl}의 Redis 데이터 조작 로직을 검증하는 테스트 클래스입니다.
  * <p>
- * Mockito를 사용하여 Redis 인프라 계층을 모킹(Mocking)하고,
- * IP 기반의 횟수 제한 및 차단 정책이 올바르게 작동하는지 확인합니다.
+ * Redis 인프라 계층과의 상호작용이 설정된 정책(TTL, Key 생성 등)에 따라
+ * 정확하게 수행되는지 확인합니다.
  */
 @Slf4j
 @ExtendWith(MockitoExtension.class)
@@ -41,86 +38,83 @@ class RateLimitServiceImplTest {
     private RateLimitServiceImpl rateLimitService;
 
     private final String clientIp = "127.0.0.1";
-    private final String attemptKey = "rate_limit:attempts:" + clientIp;
-    private final String banKey = "rate_limit:ban:" + clientIp;
+    private final String banKey = "rate_limit:ban:127.0.0.1";
+    private final String attemptKey = "rate_limit:attempts:127.0.0.1";
 
-    /**
-     * 각 테스트 실행 전 RedisTemplate의 동작을 정의합니다.
-     */
     @BeforeEach
     void setUp() {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
     /**
-     * 정상적인 요청 흐름을 테스트합니다.
+     * IP 차단 여부 조회 로직을 테스트합니다.
      * <p>
-     * 1회 시도 시 Redis에 횟수가 기록되고, 최초 시도이므로 만료 시간이 설정되어야 합니다.
+     * Redis에 해당 IP의 Ban 키가 존재할 경우 {@code true}를 반환해야 합니다.
      */
     @Test
-    @DisplayName("정상 요청 테스트: 시도 횟수가 임계치 미만이면 통과한다.")
-    void checkRateLimit_Success() {
-        log.info("시나리오: 정상 IP({})의 최초 요청 발생", clientIp);
-
-        // given
-        given(redisTemplate.hasKey(banKey)).willReturn(false);
-        given(valueOperations.increment(attemptKey)).willReturn(1L);
-
-        // when
-        rateLimitService.checkRateLimit(clientIp);
-
-        // then
-        log.info("검증: 시도 횟수 증가 및 만료 시간 설정 확인");
-        verify(redisTemplate).expire(eq(attemptKey), anyLong(), eq(TimeUnit.MINUTES));
-    }
-
-    /**
-     * 이미 차단된 IP의 요청을 테스트합니다.
-     * <p>
-     * Redis에 Ban 키가 존재할 경우, 이후 로직을 수행하지 않고 즉시 예외를 던져야 합니다.
-     */
-    @Test
-    @DisplayName("차단 확인 테스트: 이미 차단된 IP는 즉시 예외를 발생시킨다.")
-    void checkRateLimit_AlreadyBanned() {
-        log.info("시나리오: 이미 차단된 IP({})의 재접속 시도", clientIp);
-
+    @DisplayName("IP 차단 확인 테스트: Ban 키 존재 시 true를 반환한다.")
+    void isIpBanned_True() {
         // given
         given(redisTemplate.hasKey(banKey)).willReturn(true);
 
-        // when & then
-        AuthException exception = assertThrows(AuthException.class, () ->
-                rateLimitService.checkRateLimit(clientIp)
-        );
+        // when
+        boolean isBanned = rateLimitService.isIpBanned(clientIp);
 
-        log.info("결과: 에러 메시지 확인 -> {}", exception.getErrorCode().getMessage());
-        assertEquals(TOO_MANY_REQUESTS, exception.getErrorCode());
-        verify(valueOperations, never()).increment(anyString());
+        // then
+        assertEquals(true, isBanned);
     }
 
     /**
-     * 횟수 초과 시 자동 차단 로직을 테스트합니다.
+     * 시도 횟수 증가 및 만료 시간 설정을 테스트합니다.
      * <p>
-     * 5회째 요청이 들어오면 Redis에 10분짜리 Ban 키를 생성하고 기존 시도 기록을 삭제해야 합니다.
+     * 최초 시도 시 횟수가 1로 기록되고 윈도우 시간(TTL)이 설정되어야 합니다.
      */
     @Test
-    @DisplayName("차단 실행 테스트: 5회 이상 시도 시 IP를 10분간 차단한다.")
-    void checkRateLimit_TriggerBan() {
-        log.info("시나리오: IP({})의 시도 횟수 5회 도달 (임계치 초과)", clientIp);
-
+    @DisplayName("시도 횟수 증가 테스트: 최초 시도 시 TTL이 설정된다.")
+    void incrementAttempt_FirstAttempt() {
         // given
-        given(redisTemplate.hasKey(banKey)).willReturn(false);
-        given(valueOperations.increment(attemptKey)).willReturn(5L);
+        given(valueOperations.increment(attemptKey)).willReturn(1L);
 
-        // when & then
-        AuthException exception = assertThrows(AuthException.class, () ->
-                rateLimitService.checkRateLimit(clientIp)
-        );
+        // when
+        Long count = rateLimitService.incrementAttempt(clientIp, 1);
 
-        log.info("결과: TOO_MANY_REQUESTS 예외 발생 및 10분 차단 설정 확인");
-        assertEquals(TOO_MANY_REQUESTS, exception.getErrorCode());
+        // then
+        assertEquals(1L, count);
+        verify(redisTemplate).expire(eq(attemptKey), eq(1L), eq(TimeUnit.MINUTES));
+    }
 
-        // then: Ban 키 생성 및 시도 횟수 키 삭제 검증
+    /**
+     * 특정 IP의 차단 등록 로직을 테스트합니다.
+     * <p>
+     * 지정된 시간(10분) 동안 Redis에 BANNED 상태 값이 저장되어야 합니다.
+     */
+    @Test
+    @DisplayName("IP 차단 등록 테스트: 10분간 Redis에 차단 상태를 저장한다.")
+    void banIp_Success() {
+        // when
+        rateLimitService.banIp(clientIp, 10);
+
+        // then
         verify(valueOperations).set(eq(banKey), eq("BANNED"), eq(10L), eq(TimeUnit.MINUTES));
-        verify(redisTemplate).delete(attemptKey);
+    }
+
+    /**
+     * 이메일 발송 쿨타임 활성화 여부를 테스트합니다.
+     * <p>
+     * Redis에 이메일 제한 키가 존재하면 {@code true}를 반환해야 합니다.
+     */
+    @Test
+    @DisplayName("이메일 쿨타임 확인 테스트: 제한 키 존재 시 true를 반환한다.")
+    void isEmailCooldownActive_True() {
+        // given
+        String email = "test@dodo.com";
+        String emailKey = "rate_limit:email:test@dodo.com";
+        given(redisTemplate.hasKey(emailKey)).willReturn(true);
+
+        // when
+        boolean isActive = rateLimitService.isEmailCooldownActive(email);
+
+        // then
+        assertEquals(true, isActive);
     }
 }

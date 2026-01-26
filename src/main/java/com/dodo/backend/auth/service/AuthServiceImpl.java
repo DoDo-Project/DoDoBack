@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.dodo.backend.auth.exception.AuthErrorCode.INVALID_REQUEST;
+import static com.dodo.backend.auth.exception.AuthErrorCode.TOO_MANY_REQUESTS;
 
 /**
  * {@link AuthService}의 구현체로, 전략 패턴(Strategy Pattern)을 사용하여 소셜 로그인을 처리합니다.
@@ -110,10 +111,28 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * Redis를 활용하여 클라이언트 IP당 요청 횟수를 체크하고 보안 정책을 적용합니다.
+     * 상세 처리 프로세스:
+     * 1. {@link RateLimitService}를 통해 해당 IP의 차단(Ban) 여부를 우선 확인
+     * 2. 이미 차단된 IP일 경우 즉시 {@code TOO_MANY_REQUESTS} 예외를 발생시켜 접근 제어
+     * 3. 차단되지 않은 경우 시도 횟수를 증가시키며, 횟수가 임계치(5회)에 도달하면 10분간 IP 차단 및 기록 삭제 수행
+     *
+     * @param clientIp 요청자의 IP 주소
+     * @throws AuthException IP가 차단 상태이거나 단시간 내 요청 횟수를 초과한 경우({@code TOO_MANY_REQUESTS}) 발생
      */
     @Override
     public void checkRateLimit(String clientIp) {
-        rateLimitService.checkRateLimit(clientIp);
+        if (rateLimitService.isIpBanned(clientIp)) {
+            log.warn("차단된 IP의 접근 시도 차단 - IP: {}", clientIp);
+            throw new AuthException(TOO_MANY_REQUESTS);
+        }
+
+        Long count = rateLimitService.incrementAttempt(clientIp, 1);
+
+        if (count != null && count >= 5) {
+            log.warn("IP 차단 실행 (5회 초과) - IP: {}, 기간: 10분", clientIp);
+            rateLimitService.banIp(clientIp, 10);
+            rateLimitService.deleteAttempts(clientIp);
+            throw new AuthException(TOO_MANY_REQUESTS);
+        }
     }
 }

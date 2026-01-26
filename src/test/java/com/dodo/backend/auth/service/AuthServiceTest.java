@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -160,5 +161,106 @@ class AuthServiceTest {
 
         verify(refreshTokenRepository, never()).delete(any());
         verify(redisTemplate, never()).opsForValue();
+    }
+
+    /**
+     * 토큰 재발급 성공 시나리오를 테스트합니다.
+     * <p>
+     * 리프레시 토큰이 유효하고 Redis에 존재할 경우,
+     * 기존 토큰을 삭제(RTR)하고 새로운 액세스/리프레시 토큰을 발급해야 합니다.
+     */
+    @Test
+    @DisplayName("토큰 재발급 성공 - RTR 적용 및 신규 토큰 발급")
+    void reissueToken_Success() {
+        // given
+        String oldRefreshTokenStr = "valid-old-refresh-token";
+        String newAccessTokenStr = "new-access-token";
+        String newRefreshTokenStr = "new-refresh-token";
+        String userId = UUID.randomUUID().toString();
+        String role = "USER";
+
+        com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest request =
+                new com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest(oldRefreshTokenStr);
+
+        RefreshToken oldTokenEntity = RefreshToken.builder()
+                .usersId(userId)
+                .refreshToken(oldRefreshTokenStr)
+                .role(role)
+                .build();
+
+        given(jwtTokenProvider.validateToken(oldRefreshTokenStr))
+                .willReturn(true);
+        given(refreshTokenRepository.findByRefreshToken(oldRefreshTokenStr))
+                .willReturn(Optional.of(oldTokenEntity));
+        given(jwtTokenProvider.createAccessToken(UUID.fromString(userId), role))
+                .willReturn(newAccessTokenStr);
+        given(jwtTokenProvider.createRefreshToken(UUID.fromString(userId)))
+                .willReturn(newRefreshTokenStr);
+        given(jwtTokenProvider.getAccessTokenValidityInMilliseconds())
+                .willReturn(3600000L);
+
+        // when
+        com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse response =
+                authService.reissueToken(request);
+
+        // then
+        verify(refreshTokenRepository).delete(oldTokenEntity);
+        verify(refreshTokenRepository).save(any(RefreshToken.class));
+
+        assertThat(response.getAccessToken()).isEqualTo(newAccessTokenStr);
+        assertThat(response.getRefreshToken()).isEqualTo(newRefreshTokenStr);
+    }
+
+    /**
+     * 유효하지 않은 리프레시 토큰으로 재발급을 시도하는 시나리오를 테스트합니다.
+     * <p>
+     * 토큰 서명이 틀리거나 만료된 경우 {@link AuthException}(EXPIRED_REFRESH_TOKEN)이 발생해야 합니다.
+     */
+    @Test
+    @DisplayName("토큰 재발급 실패 - 유효하지 않은 Refresh Token")
+    void reissueToken_Fail_InvalidToken() {
+        // given
+        String invalidToken = "invalid-token";
+        com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest request =
+                new com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest(invalidToken);
+
+        given(jwtTokenProvider.validateToken(invalidToken))
+                .willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> authService.reissueToken(request))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.EXPIRED_REFRESH_TOKEN);
+
+        verify(refreshTokenRepository, never()).delete(any());
+    }
+
+    /**
+     * Redis에 저장되어 있지 않은 리프레시 토큰으로 재발급을 시도하는 시나리오를 테스트합니다.
+     * <p>
+     * 토큰 형식은 유효하지만 DB에 없는 경우(이미 로그아웃됨 등),
+     * {@link AuthException}(TOKEN_NOT_FOUND)이 발생해야 합니다.
+     */
+    @Test
+    @DisplayName("토큰 재발급 실패 - Redis에 존재하지 않는 Refresh Token")
+    void reissueToken_Fail_NotFoundInRedis() {
+        // given
+        String notFoundToken = "valid-format-token";
+        com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest request =
+                new com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest(notFoundToken);
+
+        given(jwtTokenProvider.validateToken(notFoundToken))
+                .willReturn(true);
+        given(refreshTokenRepository.findByRefreshToken(notFoundToken))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> authService.reissueToken(request))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.TOKEN_NOT_FOUND);
+
+        verify(refreshTokenRepository, never()).delete(any());
     }
 }

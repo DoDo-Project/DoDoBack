@@ -3,9 +3,12 @@ package com.dodo.backend.auth.service;
 import com.dodo.backend.auth.client.SocialApiClient;
 import com.dodo.backend.auth.dto.request.AuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
+import com.dodo.backend.auth.dto.response.AuthResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
+import com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse;
 import com.dodo.backend.auth.entity.RefreshToken;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.auth.repository.RefreshTokenRepository;
@@ -168,5 +171,51 @@ public class AuthServiceImpl implements AuthService {
         }
 
         log.info("로그아웃 완료 - User ID: {}", refreshToken.getUsersId());
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 상세 처리 프로세스:
+     * 1. 전달받은 Refresh Token의 유효성(서명, 만료 여부)을 JWT 자체 검증으로 확인
+     * 2. Redis 조회: 해당 토큰이 실제로 저장되어 있는지 확인 (만료되거나 이미 사용된 경우 예외 발생)
+     * 3. RTR 수행: 기존 토큰을 삭제하고, 동일한 유저 정보로 새로운 Access/Refresh Token 생성
+     * 4. 새로운 Refresh Token을 Redis에 저장 및 응답 반환
+     */
+    @Transactional
+    @Override
+    public TokenResponse reissueToken(ReissueRequest request) {
+        String requestRefreshToken = request.getRefreshToken();
+
+        if (!jwtTokenProvider.validateToken(requestRefreshToken)) {
+            log.warn("재발급 실패: 유효하지 않거나 만료된 Refresh Token입니다.");
+            throw new AuthException(EXPIRED_REFRESH_TOKEN);
+        }
+
+        RefreshToken storedToken = refreshTokenRepository.findByRefreshToken(requestRefreshToken)
+                .orElseThrow(() -> {
+                    log.warn("재발급 실패: Redis에서 토큰을 찾을 수 없습니다.");
+                    return new AuthException(TOKEN_NOT_FOUND);
+                });
+
+        refreshTokenRepository.delete(storedToken);
+
+        UUID userId = UUID.fromString(storedToken.getUsersId());
+        String role = storedToken.getRole();
+
+        String newAccessToken = jwtTokenProvider.createAccessToken(userId, role);
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(userId);
+
+        refreshTokenRepository.save(RefreshToken.builder()
+                .usersId(userId.toString())
+                .refreshToken(newRefreshToken)
+                .role(role)
+                .build());
+
+        log.info("토큰 재발급 성공 - User ID: {}", userId);
+
+        long expiresInSeconds = jwtTokenProvider.getAccessTokenValidityInMilliseconds() / 1000;
+
+        return TokenResponse.toDto(newAccessToken, newRefreshToken, expiresInSeconds);
     }
 }

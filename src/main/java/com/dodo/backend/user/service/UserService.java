@@ -1,9 +1,11 @@
 package com.dodo.backend.user.service;
 
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
+import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 
 import java.util.Map;
+import java.util.UUID;
 
 public interface UserService {
 
@@ -17,4 +19,9 @@ public interface UserService {
      * (AuthService에서 소셜 API 통신 완료 후 호출)
      */
     Map<String, Object> findOrSaveSocialUser(String email, String name, String profileImage);
+
+    /**
+     * 유저 정보를 조회합니다.
+     */
+    UserInfoResponse getUserInfo(UUID userId);
 }

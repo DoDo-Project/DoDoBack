@@ -68,7 +68,7 @@ public enum UserErrorCode implements BaseErrorCode {
      * <p>
      * HTTP {@code 409 Conflict}를 반환합니다.
      */
-    CONFLICT_DATA(HttpStatus.CONFLICT, "이미 사용 중인 닉네임 또는 전화번호입니다."),
+    CONFLICT_DATA(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
 
     /**
      * 단시간에 과도한 요청이 발생하여 요청을 제한할 때 사용합니다.

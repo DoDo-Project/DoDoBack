@@ -3,6 +3,7 @@ package com.dodo.backend.user.service;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.common.util.JwtTokenProvider;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
+import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.entity.User;
 import com.dodo.backend.user.entity.UserRole;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static com.dodo.backend.auth.exception.AuthErrorCode.ACCOUNT_RESTRICTED;
 import static com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse.toDto;
@@ -143,5 +145,31 @@ public class UserServiceImpl implements UserService {
                 accessToken,
                 refreshToken,
                 jwtTokenProvider.getAccessTokenValidityInMilliseconds());
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 상세 처리 프로세스:
+     * 1. 전달받은 UUID 식별자를 기반으로 유저 엔티티 조회
+     * 2. 식별자 유효성(null) 및 유저의 계정 상태(삭제 여부)를 {@code if} 문으로 검증
+     * 3. 유효한 유저일 경우 엔티티를 응답용 DTO로 변환하여 반환
+     *
+     * @param userId 유저의 고유 UUID 식별자
+     * @return 유저의 상세 프로필 정보가 담긴 DTO
+     * @throws UserException 유저를 찾을 수 없거나({@code USER_NOT_FOUND}),
+     * 잘못된 요청(null 식별자 또는 삭제된 유저)인 경우({@code INVALID_REQUEST}) 발생
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public UserInfoResponse getUserInfo(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
+
+        if (user.getUserStatus() == UserStatus.DELETED || userId == null) {
+            throw new UserException(INVALID_REQUEST);
+        }
+
+        return UserInfoResponse.toDto(user, "유저 정보 조회 성공했습니다.");
     }
 }

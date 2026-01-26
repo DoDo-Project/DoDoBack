@@ -33,6 +33,9 @@
             users_id = #{userId}
     </update>
 
+    <!-- if 문을 써서 값이 들어온 항목만 콕 집어서 바꿉니다.
+         1. user_status_updated_at은 현재 시간(NOW())으로 갱신
+         2. WHERE users_id : 토큰에서 추출한 userId를 기준으로 특정 유저를 식별-->
     <update id="updateUserProfileInfo" parameterType="com.dodo.backend.user.entity.User">
         UPDATE users
         <set>
@@ -42,5 +45,14 @@
             user_status_updated_at = NOW()
         </set>
         WHERE users_id = #{usersId}
+    </update>
+
+    <!-- 사용자의 알림수신 여부를 전환합니다.
+         1. notification_enabled : 입력 받은 상태로 변경
+         2. WHERE users_id : 토큰에서 추출한 userId를 기준으로 특정 유저를 식별-->
+    <update id="updateNotificationStatus">
+        UPDATE users
+        SET notification_enabled = #{enabled}
+        WHERE users_id = #{userId}
     </update>
 </mapper>

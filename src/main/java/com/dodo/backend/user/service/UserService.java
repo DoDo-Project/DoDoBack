@@ -83,4 +83,14 @@ public interface UserService {
      */
     UserUpdateResponse updateUserInfo(UUID userId, UserUpdateRequest request);
 
+    /**
+     * 사용자의 알림 수신 설정(ON/OFF)을 변경합니다.
+     * <p>
+     * 변경하고자 하는 알림 수신 여부 값을 받아, 해당 사용자의 설정 상태를 즉시 갱신합니다.
+     *
+     * @param userId  설정을 변경할 사용자의 고유 식별자(UUID)
+     * @param enabled 변경할 알림 수신 여부 (true: 수신 허용, false: 수신 거부)
+     */
+    void updateNotification(UUID userId, Boolean enabled);
+
 }

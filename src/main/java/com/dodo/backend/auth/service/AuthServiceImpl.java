@@ -31,6 +31,7 @@ import static com.dodo.backend.auth.exception.AuthErrorCode.INVALID_REQUEST;
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
+    private final RateLimitService rateLimitService;
     private final List<SocialApiClient> socialApiClients;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
@@ -104,5 +105,15 @@ public class AuthServiceImpl implements AuthService {
                     )
             );
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Redis를 활용하여 클라이언트 IP당 요청 횟수를 체크하고 보안 정책을 적용합니다.
+     */
+    @Override
+    public void checkRateLimit(String clientIp) {
+        rateLimitService.checkRateLimit(clientIp);
     }
 }

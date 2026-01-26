@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,11 +44,23 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "로그인 성공 (토큰 발급)",
                     content = @Content(schema = @Schema(implementation = SocialLoginResponse.class))),
             @ApiResponse(responseCode = "202", description = "회원가입 필요 (임시 토큰 발급)",
-                    content = @Content(schema = @Schema(implementation = SocialRegisterResponse.class)))
+                    content = @Content(schema = @Schema(implementation = SocialRegisterResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
+            @ApiResponse(responseCode = "401", description = "아이디 또는 비밀번호가 일치하지 않습니다."),
+            @ApiResponse(responseCode = "403", description = "정지된 계정입니다. 또는 휴면 계정입니다."),
+            @ApiResponse(responseCode = "404", description = "요청하신 아이디를 찾을 수 없습니다."),
+            @ApiResponse(responseCode = "429", description = "요청 횟수 제한을 초과했습니다. 잠시 후 다시 시도해주세요."),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
     })
     @PostMapping("/social-login")
-    public ResponseEntity<?> doSocialLogin(@RequestBody @Valid SocialLoginRequest request) {
+    public ResponseEntity<?> doSocialLogin(@RequestBody @Valid SocialLoginRequest request, HttpServletRequest httpRequest) {
+
+        String clientIp = httpRequest.getRemoteAddr();
+
         log.info("소셜 로그인 요청 수신 - provider: {}", request.getProvider());
+
+        authService.checkRateLimit(clientIp);
+
         return authService.socialLogin(request);
     }
 }

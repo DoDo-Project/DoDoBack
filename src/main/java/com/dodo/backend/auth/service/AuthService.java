@@ -20,4 +20,9 @@ public interface AuthService {
      * - 신규 회원: 202 Accepted + Registration Token (이메일, 이름 포함)
      */
     ResponseEntity<?> socialLogin(AuthRequest.SocialLoginRequest request);
+
+    /**
+     * 클라이언트 IP를 기반으로 요청 횟수를 제한합니다.
+     */
+    void checkRateLimit(String clientIp);
 }

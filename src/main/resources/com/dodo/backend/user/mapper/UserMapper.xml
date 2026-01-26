@@ -32,4 +32,15 @@
         WHERE
             users_id = #{userId}
     </update>
+
+    <update id="updateUserProfileInfo" parameterType="com.dodo.backend.user.entity.User">
+        UPDATE users
+        <set>
+            <if test="nickname != null">nickname = #{nickname},</if>
+            <if test="region != null">region = #{region},</if>
+            <if test="hasFamily != null">has_family = #{hasFamily},</if>
+            user_status_updated_at = NOW()
+        </set>
+        WHERE users_id = #{usersId}
+    </update>
 </mapper>

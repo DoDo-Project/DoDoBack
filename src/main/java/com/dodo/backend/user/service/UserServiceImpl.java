@@ -4,9 +4,11 @@ import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.auth.service.RateLimitService;
 import com.dodo.backend.common.jwt.JwtTokenProvider;
 import com.dodo.backend.mail.service.MailService;
+import com.dodo.backend.user.dto.request.UserRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
 import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
+import com.dodo.backend.user.dto.response.UserResponse.UserUpdateResponse;
 import com.dodo.backend.user.entity.User;
 import com.dodo.backend.user.entity.UserRole;
 import com.dodo.backend.user.entity.UserStatus;
@@ -24,7 +26,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.dodo.backend.auth.exception.AuthErrorCode.ACCOUNT_RESTRICTED;
-import static com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse.toDto;
 import static com.dodo.backend.user.entity.UserStatus.*;
 import static com.dodo.backend.user.exception.UserErrorCode.*;
 
@@ -145,7 +146,7 @@ public class UserServiceImpl implements UserService {
         String accessToken = jwtTokenProvider.createAccessToken(user.getUsersId(), "USER");
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUsersId());
 
-        return toDto(user, "회원가입 성공했습니다.",
+        return UserRegisterResponse.toDto(user, "회원가입 성공했습니다.",
                 accessToken,
                 refreshToken,
                 jwtTokenProvider.getAccessTokenValidityInMilliseconds());
@@ -234,5 +235,50 @@ public class UserServiceImpl implements UserService {
         rateLimitService.deleteEmailCooldown(user.getEmail());
 
         log.info("회원 탈퇴 처리 성공 - Id: {}, Email: {}", userId, user.getEmail());
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 상세 처리 프로세스:
+     * 1. UUID 기반 유저 조회 (존재하지 않을 경우 USER_NOT_FOUND 예외 발생)
+     * 2. 닉네임 변경 요청이 있을 경우, 기존 닉네임과 다를 때만 중복 검증 수행
+     * 3. 변경을 원하는 필드(닉네임, 지역, 가족 여부)가 존재할 경우 엔티티 값 갱신
+     * 4. @Transactional에 의한 Dirty Checking으로 메서드 종료 시점에 Update 쿼리 실행
+     */
+    @Transactional
+    @Override
+    public UserUpdateResponse updateUserInfo(UUID userId, UserRequest.UserUpdateRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
+
+        if (request.getNickname() != null && !user.getNickname().equals(request.getNickname())) {
+            if (userRepository.existsByNickname(request.getNickname())) {
+                log.warn("닉네임 중복 발생 - Id: {}, 중복 시도 닉네임: {}", userId, request.getNickname());
+                throw new UserException(NICKNAME_DUPLICATED);
+            }
+        }
+
+        User updateParam = User.builder()
+                .usersId(userId)
+                .nickname(request.getNickname())
+                .region(request.getRegion())
+                .hasFamily(request.getHasFamily())
+                .build();
+
+        userMapper.updateUserProfileInfo(updateParam);
+
+
+
+        log.info("유저 프로필 수정 성공 - Id: {}", userId);
+
+        return UserUpdateResponse.toDto(
+                user,
+                "프로필 수정에 성공했습니다.",
+                request.getNickname() != null ? request.getNickname() : user.getNickname(),
+                request.getRegion() != null ? request.getRegion() : user.getRegion(),
+                request.getHasFamily() != null ? request.getHasFamily() : user.getHasFamily()
+        );
     }
 }

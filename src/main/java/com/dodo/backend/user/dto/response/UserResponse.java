@@ -101,4 +101,57 @@ public class UserResponse {
                     .build();
         }
     }
+
+    /**
+     * 유저 정보 수정 성공 시 반환되는 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "유저 정보 수정 완료 응답")
+    public static class UserUpdateResponse {
+
+        @Schema(description = "응답 메시지", example = "유저 정보 조회 성공했습니다.")
+        private String message;
+
+        @Schema(description = "이메일 주소", example = "100gusqls@naver.com")
+        private String email;
+
+        @Schema(description = "유저 실명", example = "백현빈")
+        private String name;
+
+        @Schema(description = "유저 닉네임", example = "김길자")
+        private String nickname;
+
+        @Schema(description = "활동 지역", example = "부산시 해운대구")
+        private String region;
+
+        @Schema(description = "가족 여부", example = "false")
+        private Boolean hasFamily;
+
+        @Schema(description = "프로필 이미지 URL", example = "https://i.pravatar.cc/150?img=3")
+        private String profileUrl;
+
+        @Schema(description = "계정 생성일", example = "2025-09-30T14:30:00Z")
+        private LocalDateTime createdAt;
+
+        /**
+         * 엔티티 객체를 수정 완료 응답 DTO로 변환합니다.
+         *
+         * @param user 수정된 유저 엔티티
+         * @return UserUpdateExResponse DTO
+         */
+        public static UserUpdateResponse toDto(User user, String message, String nickname, String region, Boolean hasFamily) {
+            return UserUpdateResponse.builder()
+                    .message(message)
+                    .email(user.getEmail())
+                    .name(user.getName())
+                    .nickname(nickname)
+                    .region(region)
+                    .hasFamily(hasFamily)
+                    .profileUrl(user.getProfileUrl())
+                    .createdAt(user.getUserCreatedAt())
+                    .build();
+        }
+    }
 }

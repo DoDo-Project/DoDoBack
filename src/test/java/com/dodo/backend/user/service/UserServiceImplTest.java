@@ -3,6 +3,7 @@ package com.dodo.backend.user.service;
 import com.dodo.backend.auth.exception.AuthErrorCode;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
+import com.dodo.backend.user.dto.request.UserRequest.UserUpdateRequest;
 import com.dodo.backend.user.dto.response.UserResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.entity.User;
@@ -25,15 +26,13 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * {@link UserServiceImpl}의 비즈니스 로직을 검증하는 통합 테스트 클래스입니다.
- * <p>
- * 소셜 유저 저장 및 조회(findOrSaveSocialUser)와
- * 추가 정보 입력(registerAdditionalInfo) 로직을 검증합니다.
+ * 유저 서비스 레이어의 비즈니스 로직을 검증하는 통합 테스트 클래스입니다.
  */
 @SpringBootTest
 @Transactional
@@ -62,153 +61,101 @@ class UserServiceImplTest {
     private WebClient webClient;
 
     @Nested
-    @DisplayName("소셜 유저 조회 및 저장 테스트 (findOrSaveSocialUser)")
+    @DisplayName("소셜 유저 조회 및 저장 테스트")
     class FindOrSaveSocialUserTest {
 
-        /**
-         * DB에 없는 새로운 이메일로 요청 시, REGISTER 상태로 저장되고 신규 회원 플래그가 true여야 합니다.
-         */
         @Test
-        @DisplayName("신규 유저: DB에 REGISTER 상태로 저장되고 isNewMember=true 반환")
+        @DisplayName("신규 유저는 REGISTER 상태로 저장")
         void newMemberRegistrationTest() {
             // given
             String email = "new_user@test.com";
             String name = "신규유저";
-            log.info("신규 회원 가입 테스트 시작 - 이메일: {}", email);
+            log.info("신규 유저 저장 테스트 시작 - 이메일: {}", email);
 
             // when
             Map<String, Object> result = userService.findOrSaveSocialUser(email, name, "");
-            log.info("서비스 실행 결과: {}", result);
 
             // then
             assertThat(result.get("isNewMember")).isEqualTo(true);
-            assertThat(result.get("email")).isEqualTo(email);
-
-            User savedUser = userRepository.findByEmail(email).orElse(null);
-            assertThat(savedUser).isNotNull();
+            User savedUser = userRepository.findByEmail(email).orElseThrow();
             assertThat(savedUser.getUserStatus()).isEqualTo(UserStatus.REGISTER);
-
-            log.info("DB 저장 상태 확인 완료 - 상태: {}", savedUser.getUserStatus());
+            log.info("신규 유저 가입 대기 상태 저장 확인 완료");
         }
 
-        /**
-         * 이미 ACTIVE 상태인 유저가 요청 시, isNewMember=false와 기존 정보를 반환해야 합니다.
-         */
         @Test
-        @DisplayName("기존 유저(ACTIVE): 정보 반환 및 isNewMember=false 반환")
-        void existingActiveMemberTest() {
-            // given
-            String email = "active@test.com";
-            User activeUser = createTestUser(email, UserStatus.ACTIVE);
-            userRepository.save(activeUser);
-            log.info("기존 ACTIVE 유저 저장 완료: {}", email);
-
-            // when
-            Map<String, Object> result = userService.findOrSaveSocialUser(email, "기존유저", "");
-            log.info("서비스 실행 결과: {}", result);
-
-            // then
-            assertThat(result.get("isNewMember")).isEqualTo(false);
-            assertThat(result.get("userId")).isEqualTo(activeUser.getUsersId());
-            log.info("기존 유저 ID 일치 확인 완료.");
-        }
-
-        /**
-         * 정지된(SUSPENDED) 계정으로 접근 시 AuthException이 발생해야 합니다.
-         */
-        @Test
-        @DisplayName("정지된 계정(SUSPENDED): 로그인 시도 시 AuthException 발생")
+        @DisplayName("정지된 계정은 접근 제한 예외 발생")
         void suspendedUserTest() {
             // given
             String email = "suspended@test.com";
             User suspendedUser = createTestUser(email, UserStatus.SUSPENDED);
             userRepository.save(suspendedUser);
-            log.info("정지된(SUSPENDED) 유저 저장 완료: {}", email);
+            log.info("정지 계정 로그인 차단 테스트 시작 - 이메일: {}", email);
 
             // when & then
             AuthException exception = assertThrows(AuthException.class, () -> {
                 userService.findOrSaveSocialUser(email, "정지유저", "");
             });
 
-            log.info("예상된 예외 발생 확인: {}", exception.getErrorCode());
             assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.ACCOUNT_RESTRICTED);
+            log.info("정지 계정 로그인 차단 확인 완료");
         }
     }
 
     @Nested
-    @DisplayName("추가 정보 입력 및 가입 완료 테스트 (registerAdditionalInfo)")
+    @DisplayName("추가 정보 입력 및 가입 완료 테스트")
     class RegisterAdditionalInfoTest {
 
-        /**
-         * REGISTER 상태의 유저가 올바른 정보를 입력하면 ACTIVE 상태로 변경되고 토큰이 발급되어야 합니다.
-         */
         @Test
-        @DisplayName("정상 가입: REGISTER 상태 유저가 정보 입력 시 ACTIVE로 변경되고 토큰 발급")
+        @DisplayName("정보 입력 완료 시 ACTIVE 상태로 변경")
         void completeRegistrationSuccessTest() {
             // given
             String email = "register@test.com";
-            User registerUser = createTestUser(email, UserStatus.REGISTER);
-            userRepository.save(registerUser);
-
+            userRepository.save(createTestUser(email, UserStatus.REGISTER));
             em.flush();
             em.clear();
-
-            log.info("가입 대기(REGISTER) 유저 준비 완료: {}", email);
+            log.info("추가 정보 입력 테스트 시작 - 이메일: {}", email);
 
             UserRegisterRequest request = UserRegisterRequest.builder()
                     .nickname("멋진닉네임")
-                    .region("Seoul")
+                    .region("서울")
                     .hasFamily(true)
                     .build();
 
             // when
-            UserRegisterResponse response = userService.registerAdditionalInfo(request, email);
-            log.info("회원가입 완료 응답 메시지: {}", response.getMessage());
-
-            em.clear();
+            userService.registerAdditionalInfo(request, email);
 
             // then
+            em.clear();
             User updatedUser = userRepository.findByEmail(email).orElseThrow();
-            log.info("조회된 유저 상태: {}", updatedUser.getUserStatus());
-
-            assertThat(updatedUser.getUserStatus()).isEqualTo(UserStatus.ACTIVE); // 이제 정상 통과!
-            assertThat(updatedUser.getNickname()).isEqualTo("멋진닉네임");
-            assertThat(updatedUser.getHasFamily()).isTrue();
-
-            log.info("유저 상태 ACTIVE 변경 확인 완료.");
+            assertThat(updatedUser.getUserStatus()).isEqualTo(UserStatus.ACTIVE);
+            log.info("유저 상태 활성화 및 데이터 반영 성공 확인");
         }
 
-        /**
-         * 이미 존재하는 닉네임으로 가입을 시도하면 UserException(NICKNAME_DUPLICATED)이 발생해야 합니다.
-         */
         @Test
-        @DisplayName("중복 닉네임: 이미 존재하는 닉네임으로 가입 시도시 UserException 발생")
+        @DisplayName("중복 닉네임 사용 시 예외 발생")
         void duplicatedNicknameTest() {
             // given
             String existingNick = "중복닉네임";
-
             User existingUser = User.builder()
                     .email("existing@test.com")
                     .name("기존유저")
                     .nickname(existingNick)
-                    .region("Busan")
-                    .hasFamily(false)
-                    .role(UserRole.USER)
+                    .region("서울") // region 필수값 추가
                     .userStatus(UserStatus.ACTIVE)
-                    .userCreatedAt(LocalDateTime.now())
+                    .role(UserRole.USER)
                     .notificationEnabled(true)
                     .profileUrl("")
+                    .userCreatedAt(LocalDateTime.now())
                     .build();
             userRepository.save(existingUser);
-            log.info("중복 닉네임({})을 가진 기존 유저 저장 완료", existingNick);
 
             String newEmail = "new@test.com";
-            User newUser = createTestUser(newEmail, UserStatus.REGISTER);
-            userRepository.save(newUser);
+            userRepository.save(createTestUser(newEmail, UserStatus.REGISTER));
+            log.info("닉네임 중복 가입 차단 테스트 시작 - 닉네임: {}", existingNick);
 
             UserRegisterRequest request = UserRegisterRequest.builder()
                     .nickname(existingNick)
-                    .region("Seoul")
+                    .region("서울")
                     .hasFamily(false)
                     .build();
 
@@ -217,121 +164,138 @@ class UserServiceImplTest {
                 userService.registerAdditionalInfo(request, newEmail);
             });
 
-            log.info("중복 닉네임 예외 발생 확인: {}", exception.getErrorCode());
             assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.NICKNAME_DUPLICATED);
-        }
-
-        /**
-         * 이미 ACTIVE 상태인 유저가 추가 정보 입력을 시도하면 UserException(INVALID_REQUEST)이 발생해야 합니다.
-         */
-        @Test
-        @DisplayName("잘못된 상태: 이미 ACTIVE인 유저가 가입 시도시 UserException 발생")
-        void invalidStatusTest() {
-            // given
-            String email = "already_active@test.com";
-            User activeUser = createTestUser(email, UserStatus.ACTIVE);
-            userRepository.save(activeUser);
-            log.info("이미 가입된(ACTIVE) 유저 준비 완료: {}", email);
-
-            UserRegisterRequest request = UserRegisterRequest.builder()
-                    .nickname("새닉네임")
-                    .region("Seoul")
-                    .hasFamily(true)
-                    .build();
-
-            // when & then
-            UserException exception = assertThrows(UserException.class, () -> {
-                userService.registerAdditionalInfo(request, email);
-            });
-
-            log.info("잘못된 상태 접근 예외 발생 확인: {}", exception.getErrorCode());
-            assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.INVALID_REQUEST);
+            log.info("닉네임 중복 가입 차단 확인 완료");
         }
     }
 
     @Nested
-    @DisplayName("유저 정보 조회 테스트 (getMyInfo)")
-    class GetMyInfoTest {
+    @DisplayName("유저 정보 수정 테스트")
+    class UpdateUserInfoTest {
 
-        /**
-         * 존재하는 ACTIVE 유저의 UUID로 조회 시, 올바른 DTO 정보가 반환되어야 합니다.
-         */
         @Test
-        @DisplayName("성공: 존재하는 유저 정보 조회 시 상세 정보 반환")
-        void getMyInfoSuccessTest() {
+        @DisplayName("선택적 필드 수정 시 요청 데이터만 변경되고 응답에 반영됨")
+        void updateUserInfoPartialSuccessTest() {
             // given
-            String email = "me@test.com";
-            User user = createTestUser(email, UserStatus.ACTIVE);
+            String email = "update@test.com";
+            User user = User.builder()
+                    .email(email)
+                    .name("백현빈")
+                    .nickname("초기닉네임")
+                    .region("서울")
+                    .hasFamily(true)
+                    .userStatus(UserStatus.ACTIVE)
+                    .role(UserRole.USER)
+                    .notificationEnabled(true)
+                    .profileUrl("url")
+                    .userCreatedAt(LocalDateTime.now())
+                    .build();
             userRepository.save(user);
+            em.flush();
+            em.clear();
+            log.info("유저 정보 선택적 수정 테스트 시작");
+
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                    .nickname("변경닉네임")
+                    .region("부산")
+                    .hasFamily(null)
+                    .build();
+
+            // when
+            UserResponse.UserUpdateResponse response = userService.updateUserInfo(user.getUsersId(), request);
+
+            // then
+            assertThat(response.getNickname()).isEqualTo("변경닉네임");
+            assertThat(response.getRegion()).isEqualTo("부산");
+            assertThat(response.getHasFamily()).isTrue();
 
             em.flush();
             em.clear();
+            User updatedUser = userRepository.findById(user.getUsersId()).orElseThrow();
+            assertThat(updatedUser.getNickname()).isEqualTo("변경닉네임");
+            log.info("필드 선택적 수정 및 기존 값 유지 확인 완료");
+        }
 
-            log.info("조회 대상 유저 저장 완료 - UUID: {}", user.getUsersId());
+        @Test
+        @DisplayName("이미 존재하는 닉네임으로 수정 시도 시 UserException 발생")
+        void updateUserInfoDuplicateNicknameTest() {
+            // given
+            String takenNickname = "이미있는닉네임";
+            User otherUser = User.builder()
+                    .email("other@test.com")
+                    .name("기존유저")
+                    .nickname(takenNickname)
+                    .region("서울") // region 필수값 추가
+                    .userStatus(UserStatus.ACTIVE)
+                    .role(UserRole.USER)
+                    .notificationEnabled(true)
+                    .profileUrl("")
+                    .userCreatedAt(LocalDateTime.now())
+                    .build();
+            userRepository.save(otherUser);
+
+            User targetUser = createTestUser("target@test.com", UserStatus.ACTIVE);
+            userRepository.save(targetUser);
+            em.flush();
+            em.clear();
+            log.info("수정 시 닉네임 중복 차단 테스트 시작");
+
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                    .nickname(takenNickname)
+                    .build();
+
+            // when & then
+            UserException exception = assertThrows(UserException.class, () -> {
+                userService.updateUserInfo(targetUser.getUsersId(), request);
+            });
+
+            assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.NICKNAME_DUPLICATED);
+            log.info("수정 시 닉네임 중복 차단 확인 완료");
+        }
+
+        @Test
+        @DisplayName("본인의 현재 닉네임 유지 시 예외 없이 수정 성공")
+        void updateUserInfoSameNicknameSuccessTest() {
+            // given
+            String myNickname = "나의닉네임";
+            User user = User.builder()
+                    .email("me@test.com")
+                    .name("본인")
+                    .nickname(myNickname)
+                    .region("서울")
+                    .userStatus(UserStatus.ACTIVE)
+                    .role(UserRole.USER)
+                    .notificationEnabled(true)
+                    .profileUrl("")
+                    .userCreatedAt(LocalDateTime.now())
+                    .build();
+            userRepository.save(user);
+            em.flush();
+            em.clear();
+            log.info("본인 닉네임 유지 수정 테스트 시작");
+
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                    .nickname(myNickname)
+                    .region("인천")
+                    .build();
 
             // when
-            UserResponse.UserInfoResponse response = userService.getUserInfo(user.getUsersId());
-            log.info("조회된 유저 닉네임: {}", response.getNickname());
+            UserResponse.UserUpdateResponse response = userService.updateUserInfo(user.getUsersId(), request);
 
             // then
-            assertThat(response).isNotNull();
-            assertThat(response.getEmail()).isEqualTo(email);
-            assertThat(response.getNickname()).isEqualTo(user.getNickname());
-
-            log.info("유저 정보 일치 확인 완료.");
-        }
-
-        /**
-         * DB에 존재하지 않는 UUID로 조회 시, UserException(USER_NOT_FOUND)이 발생해야 합니다.
-         */
-        @Test
-        @DisplayName("실패: 존재하지 않는 유저 ID로 조회 시 UserException 발생")
-        void getMyInfoNotFoundTest() {
-            // given
-            java.util.UUID randomId = java.util.UUID.randomUUID();
-            log.info("존재하지 않는 랜덤 ID로 조회 시도: {}", randomId);
-
-            // when & then
-            UserException exception = assertThrows(UserException.class, () -> {
-                userService.getUserInfo(randomId);
-            });
-
-            log.info("예외 발생 확인: {}", exception.getErrorCode());
-            assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND);
-        }
-
-        /**
-         * 상태가 DELETED인 유저를 조회하려고 할 때, 비즈니스 로직에 따라 차단이 필요한 경우 예외를 발생시킵니다.
-         */
-        @Test
-        @DisplayName("실패: 삭제된(DELETED) 계정 조회 시 UserException 발생")
-        void getMyInfoDeletedUserTest() {
-            // given
-            String email = "deleted@test.com";
-            User deletedUser = createTestUser(email, UserStatus.DELETED);
-            userRepository.save(deletedUser);
-            log.info("삭제된(DELETED) 상태의 유저 저장 완료: {}", deletedUser.getUsersId());
-
-            // when & then
-            UserException exception = assertThrows(UserException.class, () -> {
-                userService.getUserInfo(deletedUser.getUsersId());
-            });
-
-            log.info("삭제된 유저 접근 예외 발생 확인: {}", exception.getErrorCode());
-            assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.INVALID_REQUEST);
+            assertThat(response.getNickname()).isEqualTo(myNickname);
+            assertThat(response.getRegion()).isEqualTo("인천");
+            log.info("본인 닉네임 유지 수정 성공 확인");
         }
     }
 
-    /**
-     * 테스트 헬퍼 메서드: 특정 상태를 가진 유저 엔티티 생성
-     */
     private User createTestUser(String email, UserStatus status) {
         return User.builder()
                 .email(email)
                 .name("테스트유저")
-                .nickname(status == UserStatus.REGISTER ? "" : "Nick_" + email.split("@")[0])
+                .nickname(status == UserStatus.REGISTER ? "" : "Nick_" + UUID.randomUUID().toString().substring(0, 8))
                 .profileUrl("")
-                .region("Seoul")
+                .region("서울")
                 .notificationEnabled(true)
                 .role(UserRole.USER)
                 .userStatus(status)

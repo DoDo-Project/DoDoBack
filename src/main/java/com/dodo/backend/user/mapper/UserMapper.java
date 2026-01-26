@@ -34,4 +34,14 @@ public interface UserMapper {
      * @param status 변경하고자 하는 새로운 유저 상태값
      */
     void updateUserStatus(@Param("userId") UUID userId, @Param("status") String status);
+
+    /**
+     * 기존 사용자의 프로필 정보(닉네임, 지역, 가족 여부)를 선택적으로 업데이트합니다.
+     * <p>
+     * 엔티티 내의 필드 값이 null이 아닌 경우에만 해당 컬럼을 수정하며,
+     * 주로 유저 정보 수정(PATCH) API의 비즈니스 로직에서 호출됩니다.
+     *
+     * @param user 변경할 데이터가 담긴 유저 엔티티 객체
+     */
+    void updateUserProfileInfo(User user);
 }

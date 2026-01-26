@@ -2,6 +2,9 @@ package com.dodo.backend.auth.service;
 
 import com.dodo.backend.auth.dto.request.AuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest;
+import com.dodo.backend.auth.dto.response.AuthResponse;
+import com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse;
 import org.springframework.http.ResponseEntity;
 
 /**
@@ -41,4 +44,16 @@ public interface AuthService {
      * @param accessToken 현재 사용 중인 액세스 토큰 (Header에서 추출)
      */
     void logout(LogoutRequest request, String accessToken);
+
+    /**
+     * 리프레시 토큰을 검증하고 새로운 액세스 토큰과 리프레시 토큰을 발급합니다.
+     * <p>
+     * 보안 강화를 위해 <b>RTR(Refresh Token Rotation)</b> 방식을 사용하여,
+     * 재발급 요청 시 기존 리프레시 토큰은 파기되고 새로운 리프레시 토큰이 발급됩니다.
+     *
+     * @param request 유효한 리프레시 토큰이 담긴 요청 객체
+     * @return 새로 발급된 토큰 쌍(Access/Refresh)과 만료 시간을 담은 응답 DTO
+     * @throws com.dodo.backend.auth.exception.AuthException 토큰이 유효하지 않거나 만료된 경우, 또는 Redis에 존재하지 않는 경우
+     */
+    TokenResponse reissueToken(ReissueRequest request);
 }

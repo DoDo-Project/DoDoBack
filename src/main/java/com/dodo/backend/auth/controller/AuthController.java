@@ -2,9 +2,12 @@ package com.dodo.backend.auth.controller;
 
 import com.dodo.backend.auth.dto.request.AuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
+import com.dodo.backend.auth.dto.response.AuthResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
+import com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse;
 import com.dodo.backend.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -97,5 +100,29 @@ public class AuthController {
         authService.logout(request, accessToken);
 
         return ResponseEntity.ok("로그아웃 되었습니다.");
+    }
+
+    /**
+     * 만료된 Access Token을 갱신하기 위해 새로운 토큰을 요청합니다.
+     * <p>
+     * Refresh Token Rotation(RTR) 정책을 사용하여, 요청 시 기존 리프레시 토큰은 폐기되고
+     * 새로운 리프레시 토큰이 함께 발급됩니다.
+     *
+     * @param request 기존의 유효한 Refresh Token이 담긴 DTO
+     * @return 새로 발급된 Access Token 및 Refresh Token 정보
+     */
+    @Operation(summary = "토큰 재발급", description = "Refresh Token을 이용하여 Access Token과 Refresh Token을 갱신합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "성공적으로 토큰이 재발급되었습니다.",
+                    content = @Content(schema = @Schema(implementation = TokenResponse.class))),
+            @ApiResponse(responseCode = "400", description = "refresh토큰이 만료되었거나 유효하지 않은 토큰입니다."),
+            @ApiResponse(responseCode = "404", description = "잘못된 요청입니다."),
+            @ApiResponse(responseCode = "409", description = "토큰이 존재하지 않습니다."),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+    })
+    @PostMapping("/reissue")
+    public ResponseEntity<TokenResponse> reissue(@RequestBody @Valid ReissueRequest request) {
+        log.info("토큰 재발급 요청 수신");
+        return ResponseEntity.ok(authService.reissueToken(request));
     }
 }

@@ -48,4 +48,18 @@ public class AuthRequest {
         @NotBlank(message = "리프레시 토큰은 필수 값입니다.")
         private String refreshToken;
     }
+
+    /**
+     * 액세스 토큰 재발급을 위한 요청 DTO입니다.
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "토큰 재발급 요청")
+    public static class ReissueRequest {
+
+        @Schema(description = "만료된 액세스 토큰을 갱신하기 위한 리프레시 토큰", example = "abc12300f29184b...")
+        @NotBlank(message = "리프레시 토큰은 필수 값입니다.")
+        private String refreshToken;
+    }
 }

@@ -65,7 +65,8 @@ public class SecurityConfig {
                                 "/auth/social-login",
                                 "/view/login",
                                 "/google-login",
-                                "/naver-login"
+                                "/naver-login",
+                                "/auth/reissue"
                         ).permitAll()
                         .requestMatchers(
                                 "/swagger-ui.html",

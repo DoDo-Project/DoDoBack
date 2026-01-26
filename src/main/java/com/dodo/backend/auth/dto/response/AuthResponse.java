@@ -82,4 +82,39 @@ public class AuthResponse {
                     .build();
         }
     }
+
+    /**
+     * 토큰 재발급 성공 시 반환되는 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "토큰 재발급 응답 (RTR 적용)")
+    public static class TokenResponse {
+
+        @Schema(description = "새로 발급된 서버 접근용 액세스 토큰", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
+        private String accessToken;
+
+        @Schema(description = "새로 갱신된 리프레시 토큰 (Rotation)", example = "def50200f29184b294277418292...")
+        private String refreshToken;
+
+        @Schema(description = "액세스 토큰 만료 시간 (초 단위)", example = "3600")
+        private Long accessTokenExpiresIn;
+
+        /**
+         * 토큰 문자열과 만료 시간을 받아 응답 DTO를 생성하는 정적 팩토리 메서드입니다.
+         *
+         * @param accessToken       새로 생성된 액세스 토큰
+         * @param refreshToken      새로 생성된 리프레시 토큰
+         * @param accessTokenExpiresIn 액세스 토큰의 유효 기간 (밀리초 단위 -> 초 단위 변환 필요 시 로직 확인)
+         * @return 빌드된 TokenResponse 객체
+         */
+        public static TokenResponse toDto(String accessToken, String refreshToken, Long accessTokenExpiresIn) {
+            return TokenResponse.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
+                    .accessTokenExpiresIn(accessTokenExpiresIn)
+                    .build();
+        }
+    }
 }

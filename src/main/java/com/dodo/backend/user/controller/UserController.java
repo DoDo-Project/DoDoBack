@@ -1,17 +1,18 @@
 package com.dodo.backend.user.controller;
 
-import com.dodo.backend.auth.dto.response.AuthResponse;
-import com.dodo.backend.user.dto.request.UserRequest;
+import com.dodo.backend.common.exception.ErrorResponse;
 import com.dodo.backend.user.dto.request.UserRequest.NotificationUpdateRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserUpdateRequest;
 import com.dodo.backend.user.dto.request.UserRequest.WithdrawalRequest;
 import com.dodo.backend.user.dto.response.UserResponse;
+import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserUpdateResponse;
 import com.dodo.backend.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -51,10 +52,22 @@ public class UserController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "회원가입이 완료되었습니다.",
                     content = @Content(schema = @Schema(implementation = UserRegisterResponse.class))),
-            @ApiResponse(responseCode = "400", description = "필수 값이 누락되었거나 형식이 올바르지 않습니다."),
-            @ApiResponse(responseCode = "401", description = "유효하지 않거나 만료된 토큰입니다."),
-            @ApiResponse(responseCode = "409", description = "이미 사용 중인 닉네임입니다."),
-            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+            @ApiResponse(responseCode = "400", description = "필수 값이 누락되었거나 형식이 올바르지 않습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"필수 값이 누락되었거나 형식이 올바르지 않습니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "유효하지 않거나 만료된 토큰입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"유효하지 않거나 만료된 토큰입니다.\"}"))),
+            @ApiResponse(responseCode = "409", description = "이미 사용 중인 닉네임입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "409 Conflict", value = "{\"status\": 409, \"message\": \"이미 사용 중인 닉네임입니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
     })
     @PutMapping("/me/profile")
     public ResponseEntity<UserRegisterResponse> completeRegistration(@Valid @RequestBody UserRegisterRequest request,
@@ -74,16 +87,31 @@ public class UserController {
     @Operation(summary = "내 정보 조회", description = "현재 로그인한 사용자의 프로필 정보를 조회합니다.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "유저 정보 조회 성공했습니다.",
-                    content = @Content(schema = @Schema(implementation = UserResponse.UserInfoResponse.class))),
-            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
-            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
-            @ApiResponse(responseCode = "403", description = "접근 권한이 없습니다."),
-            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
-            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+                    content = @Content(schema = @Schema(implementation = UserInfoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "403", description = "접근 권한이 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "403 Forbidden", value = "{\"status\": 403, \"message\": \"접근 권한이 없습니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"사용자를 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
     })
     @GetMapping("/me")
-    public ResponseEntity<UserResponse.UserInfoResponse> getMyInfo(@AuthenticationPrincipal
-                                                                       UserDetails userDetails) {
+    public ResponseEntity<UserInfoResponse> getMyInfo(@AuthenticationPrincipal
+                                                                   UserDetails userDetails) {
 
         UUID userId = UUID.fromString(userDetails.getUsername());
         log.info("유저 정보 조회 요청 - Id: {}", userId);
@@ -103,15 +131,29 @@ public class UserController {
     @Operation(summary = "탈퇴 인증 이메일 발송",
             description = "계정 탈퇴 진행을 위해 현재 로그인한 유저의 이메일로 인증 번호를 발송하고 1분 이내 재요청이 불가능합니다.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "인증 이메일 발송에 성공했습니다."),
-            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
-            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
-            @ApiResponse(responseCode = "429", description = "1분 후 다시 시도해주세요."),
-            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+            @ApiResponse(responseCode = "200", description = "인증 이메일 발송에 성공했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(name = "200", value = "{\"message\": \"인증 이메일 발송에 성공했습니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"사용자를 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "429", description = "1분 후 다시 시도해주세요.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "429 Too Many Requests", value = "{\"status\": 429, \"message\": \"잠시 후 다시 시도해주세요.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
     })
     @PostMapping("/me/withdrawal/email")
     public ResponseEntity<String> requestWithdrawalEmail(@AuthenticationPrincipal
-                                                             UserDetails userDetails) {
+                                                         UserDetails userDetails) {
         UUID userId = UUID.fromString(userDetails.getUsername());
         log.info("탈퇴 인증 이메일 발송 요청 - Id: {}", userId);
         userService.requestWithdrawal(userId);
@@ -132,11 +174,25 @@ public class UserController {
     @Operation(summary = "최종 회원 탈퇴",
             description = "발송된 인증 번호를 확인하여 회원 탈퇴를 최종 승인하고 성공 시 계정 상태가 'DELETED'로 변경됩니다.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "회원 탈퇴에 성공했습니다."),
-            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
-            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
-            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
-            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+            @ApiResponse(responseCode = "200", description = "회원 탈퇴에 성공했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(name = "200", value = "{\"message\": \"회원 탈퇴에 성공했습니다.\"}"))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"사용자를 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
     })
     @DeleteMapping("/me")
     public ResponseEntity<String> deleteWithdrawal(@RequestBody WithdrawalRequest request,
@@ -164,11 +220,26 @@ public class UserController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "프로필 수정에 성공했습니다.",
                     content = @Content(schema = @Schema(implementation = UserUpdateResponse.class))),
-            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
-            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
-            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
-            @ApiResponse(responseCode = "409", description = "이미 사용중인 닉네임입니다."),
-            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"사용자를 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "409", description = "이미 사용중인 닉네임입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "409 Conflict", value = "{\"status\": 409, \"message\": \"이미 사용 중인 닉네임입니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
     })
     @PatchMapping("/me")
     public ResponseEntity<UserUpdateResponse> updateMyInfo(
@@ -190,11 +261,25 @@ public class UserController {
      */
     @Operation(summary = "알림 수신 여부 변경", description = "유저의 알림 설정(ON/OFF)을 변경합니다.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "알림 수신 설정을 성공적으로 변경했습니다."),
-            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다."),
-            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다."),
-            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다."),
-            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.")
+            @ApiResponse(responseCode = "200", description = "알림 수신 설정을 성공적으로 변경했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(name = "200", value = "{\"message\": \"알림 수신 설정을 성공적으로 변경했습니다.\"}"))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"사용자를 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
     })
     @PatchMapping("/me/setting/notification")
     public ResponseEntity<String> updateNotification(

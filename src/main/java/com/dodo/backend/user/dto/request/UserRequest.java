@@ -32,7 +32,7 @@ public class UserRequest {
         @Schema(description = "유저 닉네임", example = "강력한 개발자")
         @NotBlank(message = "닉네임은 필수입니다.")
         @Size(min = 2, max = 10, message = "닉네임은 2자 이상 10자 이하여야 합니다.")
-        @Pattern(regexp = "^[가-힣a-zA-Z0-9]*$", message = "닉네임은 한글, 영문, 숫자만 가능합니다.")
+        @Pattern(regexp = "^[가-힣a-zA-Z0-9 ]*$", message = "닉네임은 한글, 영문, 숫자, 공백만 가능합니다.")
         private String nickname;
 
         @Schema(description = "활동 지역", example = "서울시 동대문구")

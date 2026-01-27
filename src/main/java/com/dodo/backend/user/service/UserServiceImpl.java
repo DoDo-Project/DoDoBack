@@ -87,7 +87,6 @@ public class UserServiceImpl implements UserService {
                     .profileUrl(profileImage != null ? profileImage : "")
                     .role(UserRole.USER)
                     .userStatus(UserStatus.REGISTER)
-                    .userCreatedAt(LocalDateTime.now())
                     .nickname("")
                     .region("")
                     .notificationEnabled(true)

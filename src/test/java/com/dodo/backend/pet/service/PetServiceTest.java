@@ -7,6 +7,7 @@ import com.dodo.backend.pet.entity.PetSex;
 import com.dodo.backend.pet.entity.PetSpecies;
 import com.dodo.backend.pet.exception.PetErrorCode;
 import com.dodo.backend.pet.exception.PetException;
+import com.dodo.backend.pet.mapper.PetMapper;
 import com.dodo.backend.pet.repository.PetRepository;
 import com.dodo.backend.user.entity.User;
 import com.dodo.backend.user.exception.UserErrorCode;
@@ -54,6 +55,9 @@ class PetServiceTest {
 
     @Mock
     private UserPetService userPetService;
+
+    @Mock
+    private PetMapper petMapper;
 
     /**
      * 펫 등록 성공 시나리오를 테스트합니다.
@@ -179,5 +183,133 @@ class PetServiceTest {
         verify(petRepository, times(0)).save(any(Pet.class));
 
         log.info("테스트 종료: 펫 등록 실패 (등록번호 중복)");
+    }
+
+    /**
+     * 반려동물 정보 수정 성공 시나리오를 테스트합니다. (등록번호 변경 포함)
+     */
+    @Test
+    @DisplayName("펫 수정 성공: 등록번호를 변경해도 중복이 없으면 정상적으로 수정된다.")
+    void updatePet_Success_NewRegistrationNumber() {
+        log.info("테스트 시작: 펫 수정 성공 (등록번호 변경)");
+
+        // given
+        Long petId = 1L;
+        Pet existingPet = Pet.builder()
+                .petId(petId)
+                .registrationNumber("OLD-123")
+                .petName("초코")
+                .sex(PetSex.MALE)
+                .build();
+
+        PetRequest.PetUpdateRequest request = PetRequest.PetUpdateRequest.builder()
+                .petName("새로운초코")
+                .registrationNumber("NEW-999")
+                .sex("FEMALE")
+                .age(5)
+                .build();
+
+        given(petRepository.findById(petId)).willReturn(Optional.of(existingPet));
+        given(petRepository.existsByRegistrationNumber("NEW-999")).willReturn(false);
+
+        // when
+        PetResponse.PetUpdateResponse response = petService.updatePet(petId, request);
+
+        // then
+        assertNotNull(response);
+        assertEquals("새로운초코", response.getPetName());
+        assertEquals("NEW-999", response.getRegistrationNumber());
+        assertEquals("FEMALE", response.getSex());
+
+        verify(petMapper, times(1)).updatePetProfileInfo(request, petId);
+        log.info("테스트 종료: 펫 수정 성공 (등록번호 변경)");
+    }
+
+    /**
+     * 기존 등록번호가 null인 상태에서 새로운 번호로 수정할 때 NPE가 발생하지 않는지 테스트합니다.
+     */
+    @Test
+    @DisplayName("펫 수정 성공: 기존 등록번호가 null이어도 Objects.equals 덕분에 NPE 없이 수정된다.")
+    void updatePet_Success_WhenOldRegistrationNumberIsNull() {
+        log.info("테스트 시작: NPE 방지 로직 검증");
+
+        // given
+        Long petId = 1L;
+        Pet existingPet = Pet.builder()
+                .petId(petId)
+                .registrationNumber(null)
+                .sex(PetSex.MALE)
+                .petName("기존초코")
+                .species(PetSpecies.CANINE)
+                .build();
+
+        PetRequest.PetUpdateRequest request = PetRequest.PetUpdateRequest.builder()
+                .registrationNumber("NEW-123")
+                .build();
+
+        given(petRepository.findById(petId)).willReturn(Optional.of(existingPet));
+        given(petRepository.existsByRegistrationNumber("NEW-123")).willReturn(false);
+
+        // when & then
+        assertDoesNotThrow(() -> petService.updatePet(petId, request));
+
+        verify(petMapper, times(1)).updatePetProfileInfo(request, petId);
+        log.info("테스트 종료: NPE 방지 로직 검증 완료");
+    }
+
+    /**
+     * 존재하지 않는 반려동물 ID로 수정을 시도할 때 예외 발생을 테스트합니다.
+     */
+    @Test
+    @DisplayName("펫 수정 실패: 존재하지 않는 펫 ID인 경우 예외가 발생한다.")
+    void updatePet_Fail_NotFound() {
+        log.info("테스트 시작: 펫 수정 실패 (펫 없음)");
+
+        // given
+        Long petId = 999L;
+        PetRequest.PetUpdateRequest request = PetRequest.PetUpdateRequest.builder().build();
+
+        given(petRepository.findById(petId)).willReturn(Optional.empty());
+
+        // when & then
+        PetException exception = assertThrows(PetException.class, () ->
+                petService.updatePet(petId, request)
+        );
+
+        assertEquals(PetErrorCode.PET_NOT_FOUND, exception.getErrorCode());
+        verify(petMapper, times(0)).updatePetProfileInfo(any(), any());
+        log.info("테스트 종료: 펫 수정 실패");
+    }
+
+    /**
+     * 변경하려는 등록번호가 이미 다른 펫에게 등록되어 있을 때 예외 발생을 테스트합니다.
+     */
+    @Test
+    @DisplayName("펫 수정 실패: 변경하려는 등록번호가 중복인 경우 예외가 발생한다.")
+    void updatePet_Fail_DuplicateRegistrationNumber() {
+        log.info("테스트 시작: 펫 수정 실패");
+
+        // given
+        Long petId = 1L;
+        Pet existingPet = Pet.builder()
+                .petId(petId)
+                .registrationNumber("OLD-123")
+                .build();
+
+        PetRequest.PetUpdateRequest request = PetRequest.PetUpdateRequest.builder()
+                .registrationNumber("DUPLICATE-999")
+                .build();
+
+        given(petRepository.findById(petId)).willReturn(Optional.of(existingPet));
+        given(petRepository.existsByRegistrationNumber("DUPLICATE-999")).willReturn(true);
+
+        // when & then
+        PetException exception = assertThrows(PetException.class, () ->
+                petService.updatePet(petId, request)
+        );
+
+        assertEquals(PetErrorCode.REGISTRATION_NUMBER_DUPLICATED, exception.getErrorCode());
+        verify(petMapper, times(0)).updatePetProfileInfo(any(), any());
+        log.info("테스트 종료: 펫 수정 실패");
     }
 }

@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
 <mapper namespace="com.dodo.backend.pet.mapper.PetMapper">
+
+    <!-- if 문을 써서 값이 들어온 항목만 콕 집어서 바꿉니다.
+        WHERE pet_id : petId를 기준으로 특정 애완동물을 식별-->
+    <update id="updatePetProfileInfo">
+        UPDATE pet
+        <set>
+            <if test="request.registrationNumber != null">registration_number = #{request.registrationNumber},</if>
+            <if test="request.sex != null">sex = #{request.sex},</if>
+            <if test="request.age != null">age = #{request.age},</if>
+            <if test="request.petName != null">pet_name = #{request.petName},</if>
+            <if test="request.breed != null">breed = #{request.breed},</if>
+            <if test="request.referenceHeartRate != null">reference_heart_rate = #{request.referenceHeartRate},</if>
+            <if test="request.deviceId != null">device_id = #{request.deviceId}</if>
+        </set>
+        WHERE pet_id = #{petId}
+    </update>
 </mapper>

@@ -1,5 +1,7 @@
 package com.dodo.backend.user.mapper;
 
+import com.dodo.backend.user.dto.request.UserRequest;
+import com.dodo.backend.user.dto.request.UserRequest.UserUpdateRequest;
 import com.dodo.backend.user.entity.User;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -38,12 +40,13 @@ public interface UserMapper {
     /**
      * 기존 사용자의 프로필 정보(닉네임, 지역, 가족 여부)를 선택적으로 업데이트합니다.
      * <p>
-     * 엔티티 내의 필드 값이 null이 아닌 경우에만 해당 컬럼을 수정하며,
+     * 요청 DTO(request) 내의 필드 값이 null이 아닌 경우에만 해당 컬럼을 수정하며,
      * 주로 유저 정보 수정(PATCH) API의 비즈니스 로직에서 호출됩니다.
      *
-     * @param user 변경할 데이터가 담긴 유저 엔티티 객체
+     * @param request 변경하고자 하는 새로운 프로필 정보(닉네임, 지역 등)가 담긴 요청 DTO
+     * @param userId  프로필을 수정할 유저의 고유 식별자 (UUID)
      */
-    void updateUserProfileInfo(User user);
+    void updateUserProfileInfo(@Param("request")UserUpdateRequest request, @Param("userId") UUID userId);
 
     /**
      * 특정 유저의 알림 수신 설정(notification_enabled) 상태 값을 변경합니다.

@@ -84,18 +84,15 @@ public class UserRequest {
     @Schema(description = "유저 정보 수정 요청")
     public static class UserUpdateRequest {
 
-        /** 변경하고자 하는 새로운 닉네임 (변경 시에만 포함) */
         @Schema(description = "변경할 닉네임 (선택)", example = "김길자")
         @Size(min = 2, max = 10, message = "닉네임은 2자 이상 10자 이하여야 합니다.")
         @Pattern(regexp = "^[가-힣a-zA-Z0-9]*$", message = "닉네임은 한글, 영문, 숫자만 가능합니다.")
         private String nickname;
 
-        /** 변경하고자 하는 새로운 활동 지역 (변경 시에만 포함) */
         @Schema(description = "변경할 활동 지역 (선택) ", example = "부산시 해운대구")
         @Size(max = 50, message = "지역 정보가 너무 깁니다.")
         private String region;
 
-        /** 변경하고자 하는 새로운 가족 여부 (변경 시에만 포함) */
         @Schema(description = "변경할 가족 여부 (선택 true: 있다, false: 없다)", example = "false")
         private Boolean hasFamily;
     }

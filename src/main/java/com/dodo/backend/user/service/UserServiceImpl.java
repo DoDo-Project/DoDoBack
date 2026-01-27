@@ -259,14 +259,7 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        User updateParam = User.builder()
-                .usersId(userId)
-                .nickname(request.getNickname())
-                .region(request.getRegion())
-                .hasFamily(request.getHasFamily())
-                .build();
-
-        userMapper.updateUserProfileInfo(updateParam);
+        userMapper.updateUserProfileInfo(request, userId);
 
 
 

@@ -24,7 +24,7 @@ public class Pet {
     @Column(name = "pet_id")
     private Long petId;
 
-    @Column(name = "registration_number", length = 15, nullable = false)
+    @Column(name = "registration_number", length = 15, unique = true)
     private String registrationNumber;
 
     @Enumerated(EnumType.STRING)

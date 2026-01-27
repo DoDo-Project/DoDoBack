@@ -1,5 +1,7 @@
 package com.dodo.backend.user.mapper;
 
+import com.dodo.backend.user.dto.request.UserRequest;
+import com.dodo.backend.user.dto.request.UserRequest.UserUpdateRequest;
 import com.dodo.backend.user.entity.User;
 import com.dodo.backend.user.entity.UserRole;
 import com.dodo.backend.user.entity.UserStatus;
@@ -116,21 +118,25 @@ class UserMapperTest {
     @DisplayName("매퍼를 통한 프로필 필드 선택적 수정")
     void updateUserProfileInfoTest() {
         // given
-        User updateParam = User.builder()
-                .usersId(testUser.getUsersId())
+        UUID userId = testUser.getUsersId();
+
+        UserUpdateRequest updateRequest = UserUpdateRequest.builder()
                 .nickname("수정닉네임")
                 .region(null)
                 .build();
-        log.info("프로필 선택적 수정 매퍼 테스트 시작 - 필드: 닉네임");
+
+        log.info("프로필 선택적 수정 매퍼 테스트 시작 - 대상 ID: {}, 변경 닉네임: {}", userId, updateRequest.getNickname());
 
         // when
-        userMapper.updateUserProfileInfo(updateParam);
+        userMapper.updateUserProfileInfo(updateRequest, userId);
 
         // then
         em.clear();
-        User result = userRepository.findById(testUser.getUsersId()).orElseThrow();
+        User result = userRepository.findById(userId).orElseThrow();
+
         assertThat(result.getNickname()).isEqualTo("수정닉네임");
         assertThat(result.getRegion()).isEqualTo("서울");
+
         log.info("동적 쿼리 필드 선택적 수정 검증 성공");
     }
 }

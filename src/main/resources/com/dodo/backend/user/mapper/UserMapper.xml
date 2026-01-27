@@ -36,15 +36,15 @@
     <!-- if 문을 써서 값이 들어온 항목만 콕 집어서 바꿉니다.
          1. user_status_updated_at은 현재 시간(NOW())으로 갱신
          2. WHERE users_id : 토큰에서 추출한 userId를 기준으로 특정 유저를 식별-->
-    <update id="updateUserProfileInfo" parameterType="com.dodo.backend.user.entity.User">
+    <update id="updateUserProfileInfo">
         UPDATE users
         <set>
-            <if test="nickname != null">nickname = #{nickname},</if>
-            <if test="region != null">region = #{region},</if>
-            <if test="hasFamily != null">has_family = #{hasFamily},</if>
+            <if test="request.nickname != null">nickname = #{request.nickname},</if>
+            <if test="request.region != null">region = #{request.region},</if>
+            <if test="request.hasFamily != null">has_family = #{request.hasFamily},</if>
             user_status_updated_at = NOW()
         </set>
-        WHERE users_id = #{usersId}
+        WHERE users_id = #{userId}
     </update>
 
     <!-- 사용자의 알림수신 여부를 전환합니다.

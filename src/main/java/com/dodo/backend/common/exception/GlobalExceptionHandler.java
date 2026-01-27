@@ -1,8 +1,10 @@
 package com.dodo.backend.common.exception;
 
 import com.dodo.backend.auth.exception.AuthException;
+import com.dodo.backend.pet.exception.PetException;
 import com.dodo.backend.user.exception.UserErrorCode;
 import com.dodo.backend.user.exception.UserException;
+import com.dodo.backend.userpet.exception.UserPetException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -17,8 +19,8 @@ import static com.dodo.backend.common.exception.ErrorResponse.toResponseEntity;
 /**
  * 전역(Global)에서 발생하는 예외를 중앙에서 감지하고 처리하는 핸들러 클래스입니다.
  * <p>
- * 비즈니스 로직 예외({@link AuthException}, {@link UserException}) 및
- * 입력값 유효성 검증 예외를 포착하여 통일된 JSON 포맷으로 변환해 응답합니다.
+ * 비즈니스 로직 예외 및 입력값 유효성 검증 예외를 포착하여
+ * 통일된 JSON 포맷으로 변환해 응답합니다.
  */
 @Slf4j
 @RestControllerAdvice
@@ -43,13 +45,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 펫(Pet) 도메인 비즈니스 로직에서 발생하는 {@link PetException}을 처리합니다.
+     */
+    @ExceptionHandler(PetException.class)
+    protected ResponseEntity<ErrorResponse> handlePetException(PetException e) {
+        log.error("PetException occurred: {}", e.getErrorCode());
+        return toResponseEntity(e.getErrorCode());
+    }
+
+    /**
+     * 가족/초대(UserPet) 도메인 비즈니스 로직에서 발생하는 {@link UserPetException}을 처리합니다.
+     */
+    @ExceptionHandler(UserPetException.class)
+    protected ResponseEntity<ErrorResponse> handleUserPetException(UserPetException e) {
+        log.error("UserPetException occurred: {}", e.getErrorCode());
+        return toResponseEntity(e.getErrorCode());
+    }
+
+    /**
      * {@code @Valid} 어노테이션을 통한 요청 데이터 유효성 검증 실패 시 발생하는 예외를 처리합니다.
-     * <p>
-     * DTO에 설정된 구체적인 에러 메시지를 추출하고,
-     * {@link UserErrorCode#INVALID_PARAMETER}의 상태 코드를 사용하여 응답을 생성합니다.
-     *
-     * @param e 유효성 검증 실패 정보를 담은 예외 객체
-     * @return 400 Bad Request 상태 코드와 DTO의 에러 메시지를 포함한 응답
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     protected ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {

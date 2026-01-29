@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -329,5 +330,41 @@ class UserPetServiceTest {
         verify(userPetRepository, times(0)).save(any(UserPet.class));
 
         log.info("테스트 종료: 초대 수락 실패 (이미 멤버)");
+    }
+
+    /**
+     * 유저의 펫 목록 조회 시나리오를 테스트합니다.
+     * <p>
+     * Repository를 통해 조회된 페이징 결과({@code Page<UserPet>})가
+     * 결과 Map에 "userPetPage"라는 키로 올바르게 담기는지 검증합니다.
+     */
+    @Test
+    @DisplayName("유저 펫 목록 조회 성공: 페이징된 펫 목록이 Map에 담겨 반환된다.")
+    void getUserPets_Success() {
+        log.info("테스트 시작: 유저 펫 목록 조회 성공");
+
+        // given
+        UUID userId = UUID.randomUUID();
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        
+        List<UserPet> emptyList = java.util.Collections.emptyList();
+        org.springframework.data.domain.Page<UserPet> mockPage =
+                new org.springframework.data.domain.PageImpl<>(emptyList, pageable, 0);
+
+        given(userPetRepository.findAllByUser_UsersId(userId, pageable)).willReturn(mockPage);
+
+        // when
+        Map<String, Object> result = userPetService.getUserPets(userId, pageable);
+
+        // then
+        log.info("조회된 결과 Map Key Set: {}", result.keySet());
+
+        assertNotNull(result);
+        assertTrue(result.containsKey("userPetPage"));
+        assertEquals(mockPage, result.get("userPetPage"));
+
+        verify(userPetRepository).findAllByUser_UsersId(userId, pageable);
+
+        log.info("테스트 종료: 유저 펫 목록 조회 성공");
     }
 }

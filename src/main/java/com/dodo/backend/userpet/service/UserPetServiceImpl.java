@@ -12,6 +12,8 @@ import com.dodo.backend.userpet.exception.UserPetException;
 import com.dodo.backend.userpet.repository.UserPetRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -185,6 +187,32 @@ public class UserPetServiceImpl implements UserPetService {
         Map<String, Object> result = new HashMap<>();
         result.put("pet", pet);
         result.put("members", familyMembers);
+
+        return result;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * <b>처리 과정:</b>
+     * <ol>
+     * <li>리포지토리를 호출하여 특정 사용자와 연결된 {@link UserPet} 목록을 페이징 조회합니다.</li>
+     * <li>이때, 성능 최적화를 위해 연관된 {@link com.dodo.backend.pet.entity.Pet} 엔티티를 함께 로딩(Fetch Join)합니다.</li>
+     * <li>조회된 {@code Page<UserPet>} 결과를 Map에 "userPetPage"라는 키로 담아 반환합니다.</li>
+     * </ol>
+     *
+     * @param userId   조회할 사용자의 고유 식별자(UUID)
+     * @param pageable 페이지 번호, 크기 정렬 방식 등을 포함한 페이징 요청 정보
+     * @return 페이징된 {@code Page<UserPet>} 객체를 "userPetPage" 키로 포함하는 Map 객체
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Object> getUserPets(UUID userId, Pageable pageable) {
+
+        Page<UserPet> userPetPage = userPetRepository.findAllByUser_UsersId(userId, pageable);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("userPetPage", userPetPage);
 
         return result;
     }

@@ -1,10 +1,10 @@
 package com.dodo.backend.pet.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -186,6 +186,88 @@ public class PetResponse {
                     .petName(petName)
                     .familyMembers(familyMembers)
                     .build();
+        }
+    }
+
+    /**
+     * 반려동물 목록 조회 시 반환되는 페이징 된 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "반려동물 목록 조회 응답 (페이징 포함)")
+    public static class PetListResponse {
+
+        @Schema(description = "반려동물 데이터 목록")
+        private List<PetSummary> pets;
+
+        @Schema(description = "총 페이지 수", example = "5")
+        private int totalPages;
+
+        @Schema(description = "총 데이터 수", example = "48")
+        private long totalElements;
+
+        @Schema(description = "현재 페이지 번호 (0부터 시작)", example = "0")
+        private int currentPage;
+
+        @Schema(description = "페이지 크기", example = "10")
+        private int pageSize;
+
+        /**
+         * 서비스 계층에서 변환된 {@code Page<PetSummary>} 객체를 받아 최종 응답 DTO를 생성합니다.
+         * <p>
+         * 이 메소드는 엔티티를 직접 참조하지 않으며, 이미 DTO로 변환된 데이터만을 다룹니다.
+         *
+         * @param petPage 반려동물 요약 정보(DTO)가 담긴 Page 객체
+         * @return 페이징 정보와 데이터가 포함된 {@link PetListResponse}
+         */
+        public static PetListResponse toDto(Page<PetSummary> petPage) {
+            return PetListResponse.builder()
+                    .pets(petPage.getContent())
+                    .totalPages(petPage.getTotalPages())
+                    .totalElements(petPage.getTotalElements())
+                    .currentPage(petPage.getNumber())
+                    .pageSize(petPage.getSize())
+                    .build();
+        }
+
+        /**
+         * 목록 내 개별 반려동물 요약 정보 DTO입니다.
+         */
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @Schema(description = "반려동물 요약 정보")
+        public static class PetSummary {
+            @Schema(description = "반려동물 ID", example = "101")
+            private Long petId;
+
+            @Schema(description = "이름", example = "보리")
+            private String petName;
+
+            @Schema(description = "이미지 URL", example = "https://example.com/images/bori.jpg")
+            private String imageFileUrl;
+
+            @Schema(description = "종 (CANINE, FELINE)", example = "CANINE")
+            private String species;
+
+            @Schema(description = "품종", example = "말티즈")
+            private String breed;
+
+            @Schema(description = "성별", example = "FEMALE")
+            private String sex;
+
+            @Schema(description = "나이", example = "5")
+            private Integer age;
+
+            @Schema(description = "생년월일", example = "2020-09-30")
+            private LocalDateTime birth;
+
+            @Schema(description = "체중", example = "4.2")
+            private Double weight;
+
+            @Schema(description = "등록번호", example = "4102020001231")
+            private String registrationNumber;
         }
     }
 }

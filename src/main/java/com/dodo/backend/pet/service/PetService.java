@@ -3,11 +3,10 @@ package com.dodo.backend.pet.service;
 import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
-import com.dodo.backend.pet.dto.response.PetResponse.PetFamilyJoinResponse;
-import com.dodo.backend.pet.dto.response.PetResponse.PetInvitationResponse;
-import com.dodo.backend.pet.dto.response.PetResponse.PetRegisterResponse;
-import com.dodo.backend.pet.dto.response.PetResponse.PetUpdateResponse;
+import com.dodo.backend.pet.dto.response.PetResponse;
+import com.dodo.backend.pet.dto.response.PetResponse.*;
 import com.dodo.backend.pet.entity.Pet;
+import org.springframework.data.domain.Pageable;
 
 import java.util.UUID;
 
@@ -71,4 +70,13 @@ public interface PetService {
      * @throws com.dodo.backend.pet.exception.PetException 해당 ID의 반려동물이 존재하지 않을 경우
      */
     Pet getPet(Long petId);
+
+    /**
+     * 사용자의 반려동물 목록을 페이징하여 조회합니다.
+     *
+     * @param userId   조회할 사용자의 ID
+     * @param pageable 페이징 요청 정보 (page, size)
+     * @return 페이징 처리된 반려동물 목록 응답 DTO
+     */
+    PetListResponse getPetList(UUID userId, Pageable pageable);
 }

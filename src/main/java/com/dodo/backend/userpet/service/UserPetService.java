@@ -33,4 +33,19 @@ public interface UserPetService {
      * @return 코드("code")와 만료시간("expiredAt")이 담긴 Map 객체
      */
     Map<String, Object> generateInvitationCode(UUID userId, Long petId);
+
+    /**
+     * 사용자가 입력한 초대 코드를 검증하고, 유효한 경우 해당 반려동물의 가족 구성원으로 등록합니다.
+     * <p>
+     * 1. Redis에서 초대 코드를 조회하여 유효성을 검증하고 반려동물 ID를 획득합니다.<br>
+     * 2. 요청한 사용자가 이미 해당 반려동물의 가족인지 중복 여부를 확인합니다.<br>
+     * 3. 검증이 완료되면 {@link #registerUserPet}을 호출하여 가족 관계를 생성(APPROVED)합니다.<br>
+     * 4. 갱신된 가족 구성원 목록과 펫 정보를 반환하여 응답 데이터를 구성할 수 있도록 합니다.
+     *
+     * @param userId 초대 코드를 입력한 사용자의 고유 식별자(UUID)
+     * @param code   사용자가 입력한 6자리 대문자/숫자 조합의 초대 코드
+     * @return 펫 엔티티("pet")와 최신 가족 구성원 목록("members")을 포함하는 Map 객체
+     * @throws com.dodo.backend.userpet.exception.UserPetException 코드가 유효하지 않거나, 이미 가족인 경우 발생
+     */
+    Map<String, Object> joinFamilyByCode(UUID userId, String code);
 }

@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * 펫 도메인과 관련된 응답 데이터를 캡슐화하는 DTO 그룹 클래스입니다.
@@ -130,5 +132,60 @@ public class PetResponse {
 
         @Schema(description = "초대 코드 유효 시간 (초 단위)", example = "900")
         private Long expiresIn;
+    }
+
+    /**
+     * 가족 초대 코드를 통해 그룹에 성공적으로 참여했을 때 반환되는 응답 DTO입니다.
+     * <p>
+     * 참여한 반려동물의 정보와 현재 가족 구성원 목록을 포함합니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "가족 초대 수락 및 멤버 조회 응답")
+    public static class PetFamilyJoinResponse {
+
+        @Schema(description = "반려동물 ID", example = "101")
+        private Long petId;
+
+        @Schema(description = "반려동물 이름", example = "보리")
+        private String petName;
+
+        @Schema(description = "가족 구성원 목록")
+        private List<FamilyMemberList> familyMembers;
+
+        /**
+         * 가족 구성원의 간략한 프로필 정보를 담는 내부 DTO 클래스입니다.
+         */
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @Schema(description = "가족 구성원 정보")
+        public static class FamilyMemberList {
+            @Schema(description = "사용자 ID", example = "a1b2c3d4-...")
+            private UUID userId;
+
+            @Schema(description = "프로필 이미지 URL", example = "https://i.pravatar.cc/150?img=3")
+            private String profileUrl;
+
+            @Schema(description = "닉네임", example = "이순재")
+            private String nickname;
+        }
+
+        /**
+         * 펫 정보와 가족 목록을 받아 응답 DTO를 생성하는 정적 팩토리 메서드입니다.
+         *
+         * @param petId         반려동물 ID
+         * @param petName       반려동물 이름
+         * @param familyMembers 변환된 가족 구성원 목록 DTO
+         * @return 초기화된 PetFamilyJoinResponse 객체
+         */
+        public static PetFamilyJoinResponse toDto(Long petId, String petName, List<FamilyMemberList> familyMembers) {
+            return PetFamilyJoinResponse.builder()
+                    .petId(petId)
+                    .petName(petName)
+                    .familyMembers(familyMembers)
+                    .build();
+        }
     }
 }

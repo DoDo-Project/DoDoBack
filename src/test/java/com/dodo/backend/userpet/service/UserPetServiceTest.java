@@ -1,6 +1,7 @@
 package com.dodo.backend.userpet.service;
 
 import com.dodo.backend.pet.entity.Pet;
+import com.dodo.backend.pet.service.PetService;
 import com.dodo.backend.user.entity.User;
 import com.dodo.backend.user.service.UserService;
 import com.dodo.backend.userpet.entity.RegistrationStatus;
@@ -22,6 +23,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +39,7 @@ import static org.mockito.Mockito.verify;
  * {@link UserPetService}의 비즈니스 로직을 검증하는 테스트 클래스입니다.
  * <p>
  * 유저와 펫 사이의 멤버십 관계(UserPet) 생성 및
- * 가족 초대 코드 발급 로직(Redis 연동 포함)을 단위 테스트로 확인합니다.
+ * 가족 초대 코드 발급/수락 로직을 단위 테스트로 확인합니다.
  */
 @Slf4j
 @ExtendWith(MockitoExtension.class)
@@ -57,6 +59,9 @@ class UserPetServiceTest {
 
     @Mock
     private UserService userService;
+
+    @Mock
+    private PetService petService;
 
     /**
      * UserPet 관계 등록 성공 시나리오를 테스트합니다.
@@ -175,7 +180,7 @@ class UserPetServiceTest {
         UUID userId = UUID.randomUUID();
         Long petId = 100L;
         UserPet userPet = UserPet.builder()
-                .registrationStatus(RegistrationStatus.PENDING) // 미승인 상태
+                .registrationStatus(RegistrationStatus.PENDING)
                 .build();
 
         given(userPetRepository.findById(any(UserPetId.class))).willReturn(Optional.of(userPet));
@@ -208,7 +213,7 @@ class UserPetServiceTest {
                 .build();
 
         given(userPetRepository.findById(any(UserPetId.class))).willReturn(Optional.of(userPet));
-        given(redisTemplate.hasKey(anyString())).willReturn(true); // 이미 키가 존재함
+        given(redisTemplate.hasKey(anyString())).willReturn(true);
 
         // when & then
         UserPetException exception = assertThrows(UserPetException.class, () ->
@@ -216,9 +221,113 @@ class UserPetServiceTest {
         );
 
         assertEquals(UserPetErrorCode.INVITATION_ALREADY_EXISTS, exception.getErrorCode());
-        
+
         verify(redisTemplate, times(0)).opsForValue();
 
         log.info("테스트 종료: 초대 코드 발급 실패 (중복 발급)");
+    }
+
+    /**
+     * 초대 코드 입력 및 가족 수락 성공 시나리오를 테스트합니다.
+     * <p>
+     * 1. Redis에서 코드로 petId를 조회합니다.
+     * 2. 이미 가족인지 중복 검사를 수행합니다.
+     * 3. PetService를 통해 펫 정보를 조회합니다.
+     * 4. registerUserPet을 호출하여 저장하고, 최종 가족 목록을 반환하는지 검증합니다.
+     */
+    @Test
+    @DisplayName("초대 수락 성공: 유효한 코드 입력 시 가족으로 등록되고 목록을 반환한다.")
+    void joinFamilyByCode_Success() {
+        log.info("테스트 시작: 초대 수락 성공");
+
+        // given
+        UUID userId = UUID.randomUUID();
+        String invitationCode = "7X9K2P";
+        String petIdStr = "100";
+        Long petId = 100L;
+
+        Pet pet = Pet.builder().build();
+        ReflectionTestUtils.setField(pet, "petId", petId);
+
+        User user = User.builder().build();
+        ReflectionTestUtils.setField(user, "usersId", userId);
+
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn(petIdStr);
+
+        given(userPetRepository.existsById(any(UserPetId.class))).willReturn(false);
+        given(petService.getPet(petId)).willReturn(pet);
+        given(userService.getUserEntity(userId)).willReturn(user);
+        given(userPetRepository.findAllByPetId(petId)).willReturn(List.of());
+
+        // when
+        Map<String, Object> result = userPetService.joinFamilyByCode(userId, invitationCode);
+
+        // then
+        assertNotNull(result);
+        assertEquals(pet, result.get("pet"));
+        assertNotNull(result.get("members"));
+
+        verify(userPetRepository).save(any(UserPet.class));
+        log.info("테스트 종료: 초대 수락 성공");
+    }
+
+    /**
+     * 만료되거나 존재하지 않는 초대 코드를 입력했을 때 예외 발생을 테스트합니다.
+     * <p>
+     * Redis에서 null이 반환될 때 {@link UserPetErrorCode#INVITATION_NOT_FOUND}가 발생하는지 검증합니다.
+     */
+    @Test
+    @DisplayName("초대 수락 실패: 코드가 존재하지 않거나 만료된 경우 예외가 발생한다.")
+    void joinFamilyByCode_Fail_InvalidCode() {
+        log.info("테스트 시작: 초대 수락 실패 (코드 없음)");
+
+        // given
+        UUID userId = UUID.randomUUID();
+        String invalidCode = "INVALID";
+
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn(null);
+
+        // when & then
+        UserPetException exception = assertThrows(UserPetException.class, () ->
+                userPetService.joinFamilyByCode(userId, invalidCode)
+        );
+
+        assertEquals(UserPetErrorCode.INVITATION_NOT_FOUND, exception.getErrorCode());
+        log.info("테스트 종료: 초대 수락 실패 (코드 없음)");
+    }
+
+    /**
+     * 이미 가족으로 등록된 사용자가 초대를 수락하려 할 때 예외 발생을 테스트합니다.
+     * <p>
+     * {@link UserPetErrorCode#ALREADY_FAMILY_MEMBER} 예외가 발생하는지 검증합니다.
+     */
+    @Test
+    @DisplayName("초대 수락 실패: 이미 가족 멤버인 경우 예외가 발생한다.")
+    void joinFamilyByCode_Fail_AlreadyMember() {
+        log.info("테스트 시작: 초대 수락 실패 (이미 멤버)");
+
+        // given
+        UUID userId = UUID.randomUUID();
+        String invitationCode = "7X9K2P";
+        String petIdStr = "100";
+        Long petId = 100L;
+
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn(petIdStr);
+
+        given(userPetRepository.existsById(any(UserPetId.class))).willReturn(true);
+
+        // when & then
+        UserPetException exception = assertThrows(UserPetException.class, () ->
+                userPetService.joinFamilyByCode(userId, invitationCode)
+        );
+
+        assertEquals(UserPetErrorCode.ALREADY_FAMILY_MEMBER, exception.getErrorCode());
+
+        verify(userPetRepository, times(0)).save(any(UserPet.class));
+
+        log.info("테스트 종료: 초대 수락 실패 (이미 멤버)");
     }
 }

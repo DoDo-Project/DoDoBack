@@ -1,5 +1,6 @@
 package com.dodo.backend.pet.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -113,5 +114,21 @@ public class PetResponse {
                     .deviceId(deviceId)
                     .build();
         }
+    }
+
+    /**
+     * 반려동물 가족 초대를 위한 코드 발급 요청 시 반환되는 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "반려동물 가족 초대 코드 응답")
+    public static class PetInvitationResponse {
+
+        @Schema(description = "생성된 가족 초대 코드 (영문 대문자 + 숫자, 총 6자리)", example = "7X9K2P")
+        private String code;
+
+        @Schema(description = "초대 코드 유효 시간 (초 단위)", example = "900")
+        private Long expiresIn;
     }
 }

@@ -3,6 +3,8 @@ package com.dodo.backend.pet.service;
 import com.dodo.backend.pet.dto.request.PetRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
+import com.dodo.backend.pet.dto.response.PetResponse;
+import com.dodo.backend.pet.dto.response.PetResponse.PetInvitationResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.PetRegisterResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.PetUpdateResponse;
 
@@ -32,4 +34,16 @@ public interface PetService {
      * @return 수정이 완료된 후의 최신 반려동물 상세 정보 응답 객체
      */
     PetUpdateResponse updatePet(Long petId, PetUpdateRequest request);
+
+    /**
+     * 반려동물 가족 초대를 위한 코드를 발급합니다.
+     * <p>
+     * 반려동물의 존재 여부를 검증한 후, 실제 코드 생성 및 저장 로직은
+     * {@link com.dodo.backend.userpet.service.UserPetService}에 위임합니다.
+     *
+     * @param userId 요청한 사용자 ID
+     * @param petId  반려동물 ID
+     * @return 발급된 초대 코드와 만료 시간 정보
+     */
+    PetInvitationResponse issueInvitationCode(UUID userId, Long petId);
 }

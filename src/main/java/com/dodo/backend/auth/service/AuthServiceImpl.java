@@ -1,11 +1,9 @@
 package com.dodo.backend.auth.service;
 
 import com.dodo.backend.auth.client.SocialApiClient;
-import com.dodo.backend.auth.dto.request.AuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
-import com.dodo.backend.auth.dto.response.AuthResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse;
@@ -52,10 +50,9 @@ public class AuthServiceImpl implements AuthService {
      * 상세 처리 프로세스:
      * 1. 요청된 Provider(NAVER, GOOGLE)를 지원하는 ApiClient 전략 선택 (지원 불가 시 예외 발생)
      * 2. 외부 API 통신을 통해 AccessToken 발급 및 유저 프로필 조회
-     * 3. 이메일 기반으로 유저 상태 조회 (신규/기존) 및 DB 처리 위임
-     * 4. 유저 상태에 따라 회원가입용 임시 토큰 또는 로그인용 정식 토큰 발급
-     * <p>
-     * (참고: provider, code의 null 여부는 컨트롤러단에서 @Valid를 통해 사전에 검증됩니다.)
+     * 3. 이메일 기반으로 유저 정보 조회 (UserService 호출)
+     * 4. <b>조회된 유저의 상태 문자열(status)을 검증하여 제재된 계정일 경우 예외 발생 (ACCOUNT_RESTRICTED)</b>
+     * 5. 유저 상태에 따라 회원가입용 임시 토큰 또는 로그인용 정식 토큰 발급
      */
     @Override
     public ResponseEntity<?> socialLogin(SocialLoginRequest request) {
@@ -73,6 +70,9 @@ public class AuthServiceImpl implements AuthService {
                 (String) profile.get("name"),
                 (String) profile.get("profileUrl")
         );
+
+        String status = String.valueOf(userInfo.get("status"));
+        validateUserStatus(status, (String) profile.get("email"));
 
         boolean isNewMember = (boolean) userInfo.get("isNewMember");
 
@@ -117,15 +117,30 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
+     * 유저의 계정 상태가 로그인 가능한 상태인지 검증합니다.
+     * <p>
+     * 문자열 비교를 통해 정지(SUSPENDED), 휴면(DORMANT), 삭제(DELETED) 상태일 경우
+     * {@link AuthException}을 발생시킵니다.
+     *
+     * @param status 유저의 현재 상태 문자열
+     * @param email  로그인을 시도하는 이메일 (로깅용)
+     */
+    private void validateUserStatus(String status, String email) {
+        if ("SUSPENDED".equals(status)
+                || "DORMANT".equals(status)
+                || "DELETED".equals(status)) {
+            log.warn("계정 사용 제한 유저 접속 시도 - 이메일: {}, 상태: {}", email, status);
+            throw new AuthException(ACCOUNT_RESTRICTED);
+        }
+    }
+
+    /**
      * {@inheritDoc}
      * <p>
      * 상세 처리 프로세스:
      * 1. {@link RateLimitService}를 통해 해당 IP의 차단(Ban) 여부를 우선 확인
      * 2. 이미 차단된 IP일 경우 즉시 {@code TOO_MANY_REQUESTS} 예외를 발생시켜 접근 제어
      * 3. 차단되지 않은 경우 시도 횟수를 증가시키며, 횟수가 임계치(5회)에 도달하면 10분간 IP 차단 및 기록 삭제 수행
-     *
-     * @param clientIp 요청자의 IP 주소
-     * @throws AuthException IP가 차단 상태이거나 단시간 내 요청 횟수를 초과한 경우({@code TOO_MANY_REQUESTS}) 발생
      */
     @Override
     public void checkRateLimit(String clientIp) {
@@ -152,6 +167,7 @@ public class AuthServiceImpl implements AuthService {
      * 1. 요청받은 Refresh Token을 이용해 Redis에서 저장된 토큰 정보를 조회합니다.
      * 2. 토큰이 존재하지 않을 경우 {@code TOKEN_NOT_FOUND} 예외를 발생시킵니다.
      * 3. 토큰이 존재하면 Redis에서 해당 데이터를 삭제하여 재발급을 불가능하게 만듭니다.
+     * 4. Access Token의 남은 유효 시간을 계산하여 Redis 블랙리스트에 등록합니다.
      */
     @Transactional
     @Override

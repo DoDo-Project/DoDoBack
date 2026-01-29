@@ -1,6 +1,5 @@
 package com.dodo.backend.user.service;
 
-import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.auth.service.RateLimitService;
 import com.dodo.backend.common.jwt.JwtTokenProvider;
 import com.dodo.backend.mail.service.MailService;
@@ -19,14 +18,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-
-import static com.dodo.backend.auth.exception.AuthErrorCode.ACCOUNT_RESTRICTED;
 import static com.dodo.backend.user.entity.UserStatus.*;
+import static com.dodo.backend.user.entity.UserStatus.REGISTER;
 import static com.dodo.backend.user.exception.UserErrorCode.*;
 
 /**
@@ -51,11 +47,12 @@ public class UserServiceImpl implements UserService {
      * <p>
      * 상세 처리 프로세스:
      * 1. 이메일을 기준으로 DB에서 유저 조회
-     * 2. (기존 유저) 계정 제재 상태(정지/삭제 등) 검증 및 가입 여부 확인
-     * 3. (신규 유저) 'REGISTER' 상태의 유저 엔티티 생성 및 저장
+     * 2. (기존 유저) 유저의 현재 상태(ACTIVE, SUSPENDED 등)와 기본 정보를 반환
+     * 3. (신규 유저) 'REGISTER' 상태의 유저 엔티티 생성 및 저장 후 정보 반환
+     * <p>
+     * 변경 사항: 계정 상태 검증 로직이 AuthService로 이관되었습니다.
      *
-     * @return 신규 회원 여부(isNewMember), 유저 식별자, 권한 등을 포함한 Map
-     * @throws AuthException 계정이 정지, 휴면, 또는 삭제된 상태일 경우
+     * @return 신규 회원 여부(isNewMember), 유저 식별자, 상태(status) 등을 포함한 Map
      */
     @Transactional
     @Override
@@ -69,9 +66,9 @@ public class UserServiceImpl implements UserService {
 
         if (user != null) {
             log.info("기존 등록된 유저 확인 - 상태: {}", user.getUserStatus());
-            validateUserStatus(user);
 
-            if (user.getUserStatus() == UserStatus.REGISTER) {
+            resultMap.put("status", user.getUserStatus());
+            if (user.getUserStatus() == REGISTER) {
                 resultMap.put("isNewMember", true);
             } else {
                 resultMap.put("isNewMember", false);
@@ -86,7 +83,7 @@ public class UserServiceImpl implements UserService {
                     .name(name)
                     .profileUrl(profileImage != null ? profileImage : "")
                     .role(UserRole.USER)
-                    .userStatus(UserStatus.REGISTER)
+                    .userStatus(REGISTER)
                     .nickname("")
                     .region("")
                     .notificationEnabled(true)
@@ -94,22 +91,12 @@ public class UserServiceImpl implements UserService {
 
             userRepository.save(newUser);
             resultMap.put("isNewMember", true);
+            resultMap.put("status", REGISTER);
         }
 
         return resultMap;
     }
 
-    /**
-     * 유저의 계정 상태가 서비스 이용 가능한 상태인지 검증합니다.
-     */
-    private void validateUserStatus(User user) {
-        if (user.getUserStatus() == SUSPENDED
-                || user.getUserStatus() == DORMANT
-                || user.getUserStatus() == DELETED) {
-            log.warn("계정 사용 제한 유저 접속 시도 - 이메일: {}, 상태: {}", user.getEmail(), user.getUserStatus());
-            throw new AuthException(ACCOUNT_RESTRICTED);
-        }
-    }
 
     /**
      * {@inheritDoc}
@@ -132,7 +119,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
-        if (user.getUserStatus() != UserStatus.REGISTER) {
+        if (user.getUserStatus() != REGISTER) {
             throw new UserException(INVALID_REQUEST);
         }
 
@@ -274,7 +261,6 @@ public class UserServiceImpl implements UserService {
         );
     }
 
-
     /**
      * 사용자의 알림 수신 설정(ON/OFF)을 변경합니다.
      * <p>
@@ -292,5 +278,30 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
         userMapper.updateNotificationStatus(userId, enabled);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 단순히 존재 여부만 확인하므로 {@code existsById}를 사용하여 성능을 최적화합니다.
+     */
+    @Override
+    public void validateUserExists(UUID userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new UserException(USER_NOT_FOUND);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * JPA 영속성 컨텍스트가 관리하는 엔티티를 반환하여,
+     * 다른 도메인(Pet, UserPet 등)에서 연관관계를 맺을 때 사용하도록 합니다.
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public User getUserEntity(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
     }
 }

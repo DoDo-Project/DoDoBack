@@ -135,4 +135,43 @@ class PetRepositoryTest {
         assertThat(isExists).isFalse();
         assertThat(foundPet).isEmpty();
     }
+
+    /**
+     * PK(PetId)를 기준으로 반려동물 엔티티의 존재 여부를 확인하는 기능을 검증합니다.
+     * <p>
+     * 저장된 엔티티의 ID로 조회 시 true를 반환하고,
+     * 존재하지 않는 ID로 조회 시 false를 반환하는지 확인합니다.
+     */
+    @Test
+    @DisplayName("ID 기준 존재 여부 확인(existsById) 테스트")
+    void existsByIdTest() {
+        // given
+        Pet pet = Pet.builder()
+                .registrationNumber("EXIST-ID-TEST")
+                .petName("존재확인용")
+                .species(PetSpecies.CANINE)
+                .sex(PetSex.MALE)
+                .age(2)
+                .birth(LocalDateTime.now())
+                .breed("시바견")
+                .deviceId("device-exists")
+                .build();
+
+        Pet savedPet = petRepository.save(pet);
+        Long savedId = savedPet.getPetId();
+        Long nonExistId = 999999L;
+
+        log.info("저장된 펫 ID: {}", savedId);
+
+        // when
+        boolean exists = petRepository.existsById(savedId);
+        boolean notExists = petRepository.existsById(nonExistId);
+
+        log.info("ID {} 존재 여부: {}", savedId, exists);
+        log.info("ID {} 존재 여부: {}", nonExistId, notExists);
+
+        // then
+        assertThat(exists).isTrue();
+        assertThat(notExists).isFalse();
+    }
 }

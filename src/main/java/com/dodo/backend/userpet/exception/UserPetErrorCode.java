@@ -79,6 +79,14 @@ public enum UserPetErrorCode implements BaseErrorCode {
     ALREADY_FAMILY_MEMBER(HttpStatus.CONFLICT, "이미 가족으로 등록되어있습니다."),
 
     /**
+     * 해당 반려동물에 대해 유효한 초대 코드가 이미 존재할 때 사용합니다.
+     * <p>
+     * 중복 발급을 방지하기 위해 사용되며, 기존 코드가 만료될 때까지 재발급이 제한됩니다.
+     * HTTP {@code 409 Conflict}를 반환합니다.
+     */
+    INVITATION_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 유효한 초대 코드가 존재합니다. 만료 후 다시 시도해주세요."),
+
+    /**
      * 서버 내부에서 예상치 못한 오류가 발생했을 때 사용합니다.
      * <p>
      * HTTP {@code 500 Internal Server Error}를 반환합니다.

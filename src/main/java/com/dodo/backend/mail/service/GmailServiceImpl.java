@@ -1,6 +1,6 @@
 package com.dodo.backend.mail.service;
 
-import com.dodo.backend.mail.util.VerificationCodeGenerator;
+import com.dodo.backend.common.util.VerificationCodeGenerator;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;

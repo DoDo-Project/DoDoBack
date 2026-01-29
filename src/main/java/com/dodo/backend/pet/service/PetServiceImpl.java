@@ -1,17 +1,17 @@
 package com.dodo.backend.pet.service;
 
+import com.dodo.backend.imagefile.service.ImageFileService;
 import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
-import com.dodo.backend.pet.dto.response.PetResponse.PetFamilyJoinResponse;
+import com.dodo.backend.pet.dto.response.PetResponse.*;
 import com.dodo.backend.pet.dto.response.PetResponse.PetFamilyJoinResponse.FamilyMemberList;
-import com.dodo.backend.pet.dto.response.PetResponse.PetInvitationResponse;
-import com.dodo.backend.pet.dto.response.PetResponse.PetRegisterResponse;
-import com.dodo.backend.pet.dto.response.PetResponse.PetUpdateResponse;
+import com.dodo.backend.pet.dto.response.PetResponse.PetListResponse.PetSummary;
 import com.dodo.backend.pet.entity.Pet;
 import com.dodo.backend.pet.exception.PetException;
 import com.dodo.backend.pet.mapper.PetMapper;
 import com.dodo.backend.pet.repository.PetRepository;
+import com.dodo.backend.petweight.service.PetWeightService;
 import com.dodo.backend.user.exception.UserException;
 import com.dodo.backend.user.service.UserService;
 import com.dodo.backend.userpet.entity.RegistrationStatus;
@@ -19,6 +19,8 @@ import com.dodo.backend.userpet.entity.UserPet;
 import com.dodo.backend.userpet.service.UserPetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,8 +46,10 @@ public class PetServiceImpl implements PetService {
 
     private final PetRepository petRepository;
     private final UserPetService userPetService;
+    private final PetWeightService petWeightService;
     private final UserService userService;
     private final PetMapper petMapper;
+    private final ImageFileService imageFileService;
 
     /**
      * 사용자의 요청 정보를 기반으로 반려동물을 등록하고, 소유자 관계를 설정합니다.
@@ -214,5 +218,55 @@ public class PetServiceImpl implements PetService {
     public Pet getPet(Long petId) {
         return petRepository.findById(petId)
                 .orElseThrow(() -> new PetException(PET_NOT_FOUND));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * <ol>
+     * <li>{@link UserPetService}를 통해 페이징 된 펫 목록({@code Page<UserPet>})을 조회합니다.</li>
+     * <li>조회된 목록에서 펫 ID들을 추출합니다.</li>
+     * <li>추출한 ID로 {@link PetWeightService}를 호출하여 최신 체중 정보를 일괄 조회합니다.</li>
+     * <li>추출한 ID로 이미지 이름(예: pet_profile_{id})을 생성하고 {@link ImageFileService}를 통해 이미지 URL을 일괄 조회합니다.</li>
+     * <li>Entity 목록을 순회하며 체중 및 이미지 URL을 매핑하여 {@link PetSummary} DTO로 변환합니다.</li>
+     * <li>최종적으로 페이징 정보가 포함된 응답 객체를 반환합니다.</li>
+     * </ol>
+     */
+    @Transactional(readOnly = true)
+    @Override
+    @SuppressWarnings("unchecked")
+    public PetListResponse getPetList(UUID userId, Pageable pageable) {
+
+        Map<String, Object> result = userPetService.getUserPets(userId, pageable);
+        Page<UserPet> userPetPage = (Page<UserPet>) result.get("userPetPage");
+
+        List<Long> petIds = userPetPage.getContent().stream()
+                .map(userPet -> userPet.getPet().getPetId())
+                .collect(Collectors.toList());
+
+        Map<Long, Double> weightMap = petWeightService.getRecentWeights(petIds);
+        Map<Long, String> imageMap = imageFileService.getProfileUrlsByPetIds(petIds);
+
+        Page<PetSummary> summaryPage = userPetPage.map(userPet -> {
+            Pet pet = userPet.getPet();
+
+            Double recentWeight = weightMap.get(pet.getPetId());
+            String imageUrl = imageMap.get(pet.getPetId());
+
+            return PetSummary.builder()
+                    .petId(pet.getPetId())
+                    .petName(pet.getPetName())
+                    .species(pet.getSpecies().name())
+                    .breed(pet.getBreed())
+                    .sex(pet.getSex().name())
+                    .age(pet.getAge())
+                    .birth(pet.getBirth())
+                    .weight(recentWeight)
+                    .registrationNumber(pet.getRegistrationNumber())
+                    .imageFileUrl(imageUrl)
+                    .build();
+        });
+
+        return PetListResponse.toDto(summaryPage);
     }
 }

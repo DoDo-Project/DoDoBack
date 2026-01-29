@@ -3,6 +3,9 @@ package com.dodo.backend.userpet.service;
 import com.dodo.backend.pet.entity.Pet;
 import com.dodo.backend.user.entity.User;
 import com.dodo.backend.userpet.entity.RegistrationStatus;
+import com.dodo.backend.userpet.entity.UserPet;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Map;
 import java.util.UUID;
@@ -48,4 +51,16 @@ public interface UserPetService {
      * @throws com.dodo.backend.userpet.exception.UserPetException 코드가 유효하지 않거나, 이미 가족인 경우 발생
      */
     Map<String, Object> joinFamilyByCode(UUID userId, String code);
+
+    /**
+     * 사용자가 속한 반려동물 목록을 페이징하여 조회합니다.
+     * <p>
+     * 결과는 {@code Map<String, Object>} 형태로 반환되며,
+     * 내부에는 페이징된 데이터 객체("userPetPage")가 포함됩니다.
+     *
+     * @param userId   사용자 ID
+     * @param pageable 페이징 정보
+     * @return 페이징 결과가 담긴 Map
+     */
+    Map<String, Object> getUserPets(UUID userId, Pageable pageable);
 }

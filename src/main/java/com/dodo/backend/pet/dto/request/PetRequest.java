@@ -122,6 +122,22 @@ public class PetRequest {
 
         @Schema(description = "변경할 디바이스 ID (선택)", example = "DEV-UPDATE-777")
         private String deviceId;
-
     }
+
+    /**
+     * 반려동물 가족 초대를 수락하기 위해 사용자가 입력한 코드 정보를 담는 요청 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Schema(description = "가족 초대 코드 입력 요청")
+    public static class PetFamilyJoinRequest {
+
+        @Schema(description = "(영문 대문자 + 숫자, 총 6자리)", example = "7X9K2P")
+        @NotBlank(message = "초대 코드는 필수입니다.")
+        @Size(min = 6, max = 6, message = "초대 코드는 6자리여야 합니다.")
+        private String code;
+    }
+
 }

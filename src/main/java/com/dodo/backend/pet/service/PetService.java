@@ -1,12 +1,13 @@
 package com.dodo.backend.pet.service;
 
-import com.dodo.backend.pet.dto.request.PetRequest;
+import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
-import com.dodo.backend.pet.dto.response.PetResponse;
+import com.dodo.backend.pet.dto.response.PetResponse.PetFamilyJoinResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.PetInvitationResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.PetRegisterResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.PetUpdateResponse;
+import com.dodo.backend.pet.entity.Pet;
 
 import java.util.UUID;
 
@@ -46,4 +47,28 @@ public interface PetService {
      * @return 발급된 초대 코드와 만료 시간 정보
      */
     PetInvitationResponse issueInvitationCode(UUID userId, Long petId);
+
+    /**
+     * 사용자가 입력한 초대 코드를 통해 반려동물 가족 그룹에 참여합니다.
+     * <p>
+     * 실제 등록 로직은 {@link com.dodo.backend.userpet.service.UserPetService}에서 수행하며,
+     * 결과 데이터를 응답 DTO로 변환하여 반환합니다.
+     *
+     * @param userId  요청한 사용자의 ID
+     * @param request 초대 코드가 포함된 요청 DTO (PetFamilyJoinRequest)
+     * @return 펫 정보와 가족 구성원 목록이 담긴 응답 DTO
+     */
+    PetFamilyJoinResponse joinFamily(UUID userId, PetFamilyJoinRequest request);
+
+    /**
+     * 반려동물 ID를 기반으로 Pet 엔티티를 조회합니다.
+     * <p>
+     * 다른 도메인 서비스(UserPet 등)에서 Pet 엔티티가 필요할 때
+     * 리포지토리를 직접 호출하지 않고 이 메소드를 사용합니다.
+     *
+     * @param petId 조회할 반려동물의 ID
+     * @return 조회된 Pet 엔티티
+     * @throws com.dodo.backend.pet.exception.PetException 해당 ID의 반려동물이 존재하지 않을 경우
+     */
+    Pet getPet(Long petId);
 }

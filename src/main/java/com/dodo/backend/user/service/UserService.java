@@ -6,6 +6,7 @@ import com.dodo.backend.user.dto.response.UserResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserUpdateResponse;
+import com.dodo.backend.user.entity.User;
 
 import java.util.Map;
 import java.util.UUID;
@@ -93,4 +94,26 @@ public interface UserService {
      */
     void updateNotification(UUID userId, Boolean enabled);
 
+    /**
+     * 사용자의 존재 여부를 검증합니다.
+     * <p>
+     * 반환값 없이 단순히 해당 ID를 가진 사용자가 DB에 존재하는지만 확인하며,
+     * 존재하지 않을 경우 예외를 발생시킵니다.
+     * 타 도메인(Pet 등)에서 유저 ID의 유효성을 검사할 때 사용합니다.
+     *
+     * @param userId 검증할 사용자의 고유 식별자(UUID)
+     * @throws com.dodo.backend.user.exception.UserException 유저가 존재하지 않을 경우 (USER_NOT_FOUND)
+     */
+    void validateUserExists(UUID userId);
+
+    /**
+     * 내부 로직 처리를 위해 User 엔티티 객체를 직접 조회합니다.
+     * <p>
+     * DTO가 아닌 엔티티 객체가 필요한 경우(예: JPA 연관관계 매핑)에 사용됩니다.
+     *
+     * @param userId 조회할 사용자의 고유 식별자(UUID)
+     * @return 조회된 User 엔티티 객체
+     * @throws com.dodo.backend.user.exception.UserException 유저가 존재하지 않을 경우 (USER_NOT_FOUND)
+     */
+    User getUserEntity(UUID userId);
 }

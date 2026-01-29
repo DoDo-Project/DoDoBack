@@ -5,6 +5,7 @@ import com.dodo.backend.pet.dto.request.PetRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
 import com.dodo.backend.pet.dto.response.PetResponse;
+import com.dodo.backend.pet.dto.response.PetResponse.PetInvitationResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.PetRegisterResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.PetUpdateResponse;
 import com.dodo.backend.pet.service.PetService;
@@ -132,5 +133,50 @@ public class PetController {
         PetUpdateResponse response = petService.updatePet(petId, request);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 가족 초대 코드를 생성합니다.
+     * <p>
+     * 해당 반려동물에 가족 구성원을 초대하기 위한 6자리 코드를 발급합니다.
+     * 발급된 코드는 <b>15분간 유효</b>하며, 유효 기간 내에는 <b>중복 발급되지 않습니다.</b>
+     *
+     * @param petId 초대 코드를 생성할 반려동물의 ID
+     * @param userDetails 인증된 사용자 정보
+     * @return 생성된 초대 코드와 만료 시간(초 단위) 정보를 담은 응답 객체
+     */
+    @Operation(summary = "가족 초대 코드 생성",
+            description = "반려동물에 가족을 초대하기 위한 코드를 생성하고" +
+                    "생성된 코드는 15분간 유효하며, 유효 기간 내에는 중복 발급되지 않습니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "초대 코드가 생성되었습니다.",
+                    content = @Content(schema = @Schema(implementation = PetInvitationResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "403", description = "자신이 등록하거나 속해있는 반려동물만 초대할 수 있습니다.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "403 Forbidden", value = "{\"status\": 403, \"message\": \"자신이 등록하거나 속해있는 반려동물만 초대할 수 있습니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "해당 ID의 반려동물을 찾을 수 없습니다.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"해당 ID의 반려동물을 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "409", description = "이미 유효한 초대 코드가 존재합니다.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "409 Conflict", value = "{\"status\": 409, \"message\": \"이미 유효한 초대 코드가 존재합니다. 만료 후 다시 시도해주세요.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @PostMapping("/{petId}/invitation-code")
+    public ResponseEntity<PetInvitationResponse> createInvitationCode(
+            @PathVariable Long petId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        UUID userId = UUID.fromString(userDetails.getUsername());
+
+        return ResponseEntity.ok(petService.issueInvitationCode(userId, petId));
     }
 }

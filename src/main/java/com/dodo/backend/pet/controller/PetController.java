@@ -30,7 +30,7 @@ import java.util.UUID;
 /**
  * 반려동물 도메인의 HTTP 요청을 처리하는 컨트롤러 클래스입니다.
  * <p>
- * 클라이언트로부터 펫 등록, 조회 등의 요청을 받아 서비스 계층으로 전달하고,
+ * 클라이언트로부터 펫 등록, 조회, 가족 초대 및 승인 등의 요청을 받아 서비스 계층으로 전달하고,
  * 처리 결과를 응답으로 반환합니다.
  */
 @RestController
@@ -142,7 +142,7 @@ public class PetController {
      * 해당 반려동물에 가족 구성원을 초대하기 위한 6자리 코드를 발급합니다.
      * 발급된 코드는 <b>15분간 유효</b>하며, 유효 기간 내에는 <b>중복 발급되지 않습니다.</b>
      *
-     * @param petId 초대 코드를 생성할 반려동물의 ID
+     * @param petId       초대 코드를 생성할 반려동물의 ID
      * @param userDetails 인증된 사용자 정보
      * @return 생성된 초대 코드와 만료 시간(초 단위) 정보를 담은 응답 객체
      */
@@ -287,7 +287,7 @@ public class PetController {
      */
     @Operation(summary = "반려동물 목록 조회", description = "로그인한 사용자의 반려동물 목록을 페이징하여 조회합니다.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "조회 성공",
+            @ApiResponse(responseCode = "200", description = "조회를 성공했습니다.",
                     content = @Content(schema = @Schema(implementation = PetListResponse.class))),
             @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class),
@@ -314,5 +314,89 @@ public class PetController {
         PetListResponse response = petService.getPetList(userId, pageable);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 내 모든 반려동물에게 들어온 가족 신청(대기자) 목록을 페이징하여 조회합니다.
+     * <p>
+     * 내가 소유(APPROVED)하고 있는 모든 반려동물에 대해,
+     * 가족 신청을 보낸 유저(대기자)들을 한 번에 모아서 조회합니다.
+     *
+     * @param pageable    페이징 정보 (page, size, sort)
+     * @param userDetails 인증된 사용자 정보
+     * @return 페이징된 대기자 목록 응답 객체 (HTTP 200)
+     */
+    @Operation(summary = "가족 신청 대기자 전체 조회", description = "내가 관리하는 모든 반려동물에게 들어온 가족 신청 목록을 조회합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "조회를 성공했습니다.",
+                    content = @Content(schema = @Schema(implementation = PendingUserListResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "403", description = "접근 권한이 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "403 Forbidden", value = "{\"status\": 403, \"message\": \"접근 권한이 없습니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"사용자를 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @GetMapping("/family/pending-users")
+    public ResponseEntity<PendingUserListResponse> getAllPendingUsers(
+            @Parameter(hidden = true) @PageableDefault(size = 10) Pageable pageable,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        UUID managerId = UUID.fromString(userDetails.getUsername());
+        return ResponseEntity.ok(petService.getAllPendingUsers(managerId, pageable));
+    }
+
+    /**
+     * 내가 가족 신청을 보낸 후 대기 중인 반려동물 목록을 페이징하여 조회합니다.
+     * <p>
+     * 아직 승인되지 않은(PENDING) 신청 내역만 조회되며,
+     * 신청 상태와 신청 일시 등의 요약 정보를 반환합니다.
+     *
+     * @param pageable    페이징 정보 (page, size, sort)
+     * @param userDetails 인증된 사용자 정보
+     * @return 페이징된 나의 신청 내역 목록 응답 객체 (HTTP 200)
+     */
+    @Operation(summary = "내 신청 내역 조회", description = "내가 가족 신청을 했으나 아직 승인되지 않은(PENDING) 펫 목록을 조회합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "조회를 성공했습니다.",
+                    content = @Content(schema = @Schema(implementation = PetApplicationListResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"사용자를 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @GetMapping("/family/applications")
+    public ResponseEntity<PetApplicationListResponse> getMyPendingApplications(
+            @Parameter(hidden = true) @PageableDefault(size = 10) Pageable pageable,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        UUID userId = UUID.fromString(userDetails.getUsername());
+        return ResponseEntity.ok(petService.getMyPendingApplications(userId, pageable));
     }
 }

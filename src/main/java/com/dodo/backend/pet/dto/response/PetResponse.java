@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 펫 도메인과 관련된 응답 데이터를 캡슐화하는 DTO 그룹 클래스입니다.
@@ -27,11 +28,11 @@ public class PetResponse {
     @Schema(description = "펫 등록 완료 응답")
     public static class PetRegisterResponse {
 
-        @Schema(description = "생성된 펫 ID", example = "1")
-        private Long petId;
-
         @Schema(description = "응답 메시지", example = "새 반려동물을 등록완료했습니다.")
         private String message;
+
+        @Schema(description = "생성된 펫 ID", example = "1")
+        private Long petId;
 
         /**
          * 펫 ID와 메시지를 사용하여 응답 DTO 객체를 생성하는 정적 팩토리 메서드입니다.
@@ -42,8 +43,8 @@ public class PetResponse {
          */
         public static PetRegisterResponse toDto(Long petId, String message) {
             return PetRegisterResponse.builder()
-                    .petId(petId)
                     .message(message)
+                    .petId(petId)
                     .build();
         }
     }
@@ -108,8 +109,8 @@ public class PetResponse {
                                               String sex, Integer age, String petName,
                                               String breed, Integer referenceHeartRate, String deviceId) {
             return PetUpdateResponse.builder()
-                    .petId(petId)
                     .message(message)
+                    .petId(petId)
                     .registrationNumber(registrationNumber)
                     .sex(sex)
                     .age(age)
@@ -130,6 +131,9 @@ public class PetResponse {
     @Schema(description = "반려동물 가족 초대 코드 응답")
     public static class PetInvitationResponse {
 
+        @Schema(description = "응답 메시지", example = "초대 코드가 생성되었습니다.")
+        private String message;
+
         @Schema(description = "생성된 가족 초대 코드 (영문 대문자 + 숫자, 총 6자리)", example = "7X9K2P")
         private String code;
 
@@ -149,7 +153,7 @@ public class PetResponse {
         @Schema(description = "신청한 반려동물 ID", example = "101")
         private Long petId;
 
-        @Schema(description = "처리 결과 메시지", example = "가족 등록을 신청했습니다. 승인을 기다려주세요.")
+        @Schema(description = "응답 메시지", example = "가족 등록을 신청했으니 승인을 기다려주세요.")
         private String message;
 
         /**
@@ -176,6 +180,9 @@ public class PetResponse {
     @Schema(description = "반려동물 목록 조회 응답 (페이징 포함)")
     public static class PetListResponse {
 
+        @Schema(description = "응답 메시지", example = "조회를 성공했습니다.")
+        private String message;
+
         @Schema(description = "반려동물 데이터 목록")
         private List<PetSummary> pets;
 
@@ -199,8 +206,9 @@ public class PetResponse {
          * @param petPage 반려동물 요약 정보(DTO)가 담긴 Page 객체
          * @return 페이징 정보와 데이터가 포함된 {@link PetListResponse}
          */
-        public static PetListResponse toDto(Page<PetSummary> petPage) {
+        public static PetListResponse toDto(Page<PetSummary> petPage, String message) {
             return PetListResponse.builder()
+                    .message(message)
                     .pets(petPage.getContent())
                     .totalPages(petPage.getTotalPages())
                     .totalElements(petPage.getTotalElements())
@@ -276,6 +284,164 @@ public class PetResponse {
                     .petId(petId)
                     .message(message)
                     .build();
+        }
+    }
+
+    /**
+     * 신청 대기자 목록 조회 시 반환되는 페이징 된 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "가족 신청 대기자 목록 응답 (페이징 포함)")
+    public static class PendingUserListResponse {
+
+        @Schema(description = "응답 메시지", example = "조회를 성공했습니다.")
+        private String message;
+
+        @Schema(description = "대기자 데이터 목록")
+        private List<PendingUserResponse> users;
+
+        @Schema(description = "총 페이지 수", example = "5")
+        private int totalPages;
+
+        @Schema(description = "총 데이터 수", example = "48")
+        private long totalElements;
+
+        @Schema(description = "현재 페이지 번호 (0부터 시작)", example = "0")
+        private int currentPage;
+
+        @Schema(description = "페이지 크기", example = "10")
+        private int pageSize;
+
+        public static PendingUserListResponse toDto(Page<PendingUserResponse> page, String message) {
+            return PendingUserListResponse.builder()
+                    .message(message)
+                    .users(page.getContent())
+                    .totalPages(page.getTotalPages())
+                    .totalElements(page.getTotalElements())
+                    .currentPage(page.getNumber())
+                    .pageSize(page.getSize())
+                    .build();
+        }
+
+        /**
+         * 개별 대기자(유저) 정보와 대상 펫 정보를 담는 내부 DTO입니다.
+         */
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @Schema(description = "가족 신청 대기자(유저) 및 대상 펫 정보")
+        public static class PendingUserResponse {
+
+            @Schema(description = "신청한 유저 ID", example = "550e8400-e29b-41d4-a716-446655440000")
+            private UUID userId;
+
+            @Schema(description = "신청한 유저 닉네임", example = "강아지조아")
+            private String nickname;
+
+            @Schema(description = "신청한 유저 프로필 이미지 URL", example = "https://example.com/user_profile.jpg")
+            private String profileUrl;
+
+            @Schema(description = "신청 대상 반려동물 ID", example = "101")
+            private Long targetPetId;
+
+            @Schema(description = "신청 대상 반려동물 이름", example = "보리")
+            private String targetPetName;
+
+            @Schema(description = "신청 대상 반려동물 프로필 이미지 URL", example = "https://example.com/pet_profile.jpg")
+            private String targetPetImageUrl;
+
+            @Schema(description = "신청 일시", example = "2024-02-01T12:00:00")
+            private LocalDateTime requestedAt;
+
+            public static PendingUserResponse toDto(UUID userId, String nickname, String profileUrl,
+                                                    Long targetPetId, String targetPetName, String targetPetImageUrl,
+                                                    LocalDateTime requestedAt) {
+                return PendingUserResponse.builder()
+                        .userId(userId)
+                        .nickname(nickname)
+                        .profileUrl(profileUrl)
+                        .targetPetId(targetPetId)
+                        .targetPetName(targetPetName)
+                        .targetPetImageUrl(targetPetImageUrl)
+                        .requestedAt(requestedAt)
+                        .build();
+            }
+        }
+    }
+
+    /**
+     * 내 신청 내역 조회 시 반환되는 페이징 된 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "내 신청 내역 목록 응답 (페이징 포함)")
+    public static class PetApplicationListResponse {
+
+        @Schema(description = "응답 메시지", example = "조회를 성공했습니다.")
+        private String message;
+
+        @Schema(description = "신청 내역 데이터 목록")
+        private List<PetApplicationResponse> applications;
+
+        @Schema(description = "총 페이지 수", example = "3")
+        private int totalPages;
+
+        @Schema(description = "총 데이터 수", example = "25")
+        private long totalElements;
+
+        @Schema(description = "현재 페이지 번호", example = "0")
+        private int currentPage;
+
+        @Schema(description = "페이지 크기", example = "10")
+        private int pageSize;
+
+        public static PetApplicationListResponse toDto(Page<PetApplicationResponse> page, String message) {
+            return PetApplicationListResponse.builder()
+                    .message(message)
+                    .applications(page.getContent())
+                    .totalPages(page.getTotalPages())
+                    .totalElements(page.getTotalElements())
+                    .currentPage(page.getNumber())
+                    .pageSize(page.getSize())
+                    .build();
+        }
+
+        /**
+         * 개별 신청 내역 정보를 담는 내부 DTO입니다.
+         */
+        @Getter
+        @Builder
+        @AllArgsConstructor
+        @Schema(description = "개별 신청 내역 정보")
+        public static class PetApplicationResponse {
+
+            @Schema(description = "반려동물 ID", example = "101")
+            private Long petId;
+
+            @Schema(description = "반려동물 이름", example = "보리")
+            private String petName;
+
+            @Schema(description = "반려동물 프로필 이미지 URL", example = "https://example.com/pet_profile.jpg")
+            private String petImageUrl;
+
+            @Schema(description = "신청 상태", example = "PENDING")
+            private String status;
+
+            @Schema(description = "신청 일시", example = "2024-02-01T12:00:00")
+            private LocalDateTime requestedAt;
+
+            public static PetApplicationResponse toDto(Long petId, String petName, String petImageUrl, String status, LocalDateTime requestedAt) {
+                return PetApplicationResponse.builder()
+                        .petId(petId)
+                        .petName(petName)
+                        .petImageUrl(petImageUrl)
+                        .status(status)
+                        .requestedAt(requestedAt)
+                        .build();
+            }
         }
     }
 }

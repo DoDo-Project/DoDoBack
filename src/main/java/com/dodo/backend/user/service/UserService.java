@@ -76,11 +76,4 @@ public interface UserService {
      */
     void updateNotification(UUID userId, Boolean enabled);
 
-    /**
-     * 사용자의 존재 여부를 검증합니다.
-     *
-     * @param userId 검증할 사용자의 고유 식별자(UUID)
-     * @throws com.dodo.backend.user.exception.UserException 유저가 존재하지 않을 경우 (USER_NOT_FOUND)
-     */
-    void validateUserExists(UUID userId);
 }

@@ -280,16 +280,5 @@ public class UserServiceImpl implements UserService {
         userMapper.updateNotificationStatus(userId, enabled);
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * 단순히 존재 여부만 확인하므로 {@code existsById}를 사용하여 성능을 최적화합니다.
-     */
-    @Override
-    public void validateUserExists(UUID userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new UserException(USER_NOT_FOUND);
-        }
-    }
 
 }

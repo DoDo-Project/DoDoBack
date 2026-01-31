@@ -51,6 +51,13 @@ public enum PetErrorCode implements BaseErrorCode {
     ACTION_PERMISSION_DENIED(HttpStatus.FORBIDDEN, "해당 반려동물에 대한 권한이 없습니다."),
 
     /**
+     * 요청과 관련된 사용자 정보를 찾을 수 없을 때 사용합니다.
+     * <p>
+     * HTTP {@code 404 Not Found}를 반환합니다.
+     */
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+
+    /**
      * 요청한 식별자(ID)에 해당하는 반려동물을 찾을 수 없을 때 사용합니다.
      * <p>
      * HTTP {@code 404 Not Found}를 반환합니다.

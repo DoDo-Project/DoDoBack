@@ -5,13 +5,15 @@ import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
 import com.dodo.backend.pet.dto.response.PetResponse.*;
+import com.dodo.backend.pet.dto.response.PetResponse.PendingUserListResponse.PendingUserResponse;
+import com.dodo.backend.pet.dto.response.PetResponse.PetApplicationListResponse.PetApplicationResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.PetListResponse.PetSummary;
 import com.dodo.backend.pet.entity.Pet;
 import com.dodo.backend.pet.exception.PetException;
 import com.dodo.backend.pet.mapper.PetMapper;
 import com.dodo.backend.pet.repository.PetRepository;
 import com.dodo.backend.petweight.service.PetWeightService;
-import com.dodo.backend.user.service.UserService;
+import com.dodo.backend.user.repository.UserRepository;
 import com.dodo.backend.userpet.entity.RegistrationStatus;
 import com.dodo.backend.userpet.entity.UserPet;
 import com.dodo.backend.userpet.service.UserPetService;
@@ -27,9 +29,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import static com.dodo.backend.pet.exception.PetErrorCode.*;
 
-import static com.dodo.backend.pet.exception.PetErrorCode.PET_NOT_FOUND;
-import static com.dodo.backend.pet.exception.PetErrorCode.REGISTRATION_NUMBER_DUPLICATED;
 
 /**
  * {@link PetService}의 구현체로, 펫 도메인의 비즈니스 로직을 수행합니다.
@@ -45,7 +46,7 @@ public class PetServiceImpl implements PetService {
     private final PetRepository petRepository;
     private final UserPetService userPetService;
     private final PetWeightService petWeightService;
-    private final UserService userService;
+    private final UserRepository userRepository;
     private final PetMapper petMapper;
     private final ImageFileService imageFileService;
 
@@ -62,15 +63,17 @@ public class PetServiceImpl implements PetService {
      * @param userId  펫을 등록하는 사용자의 UUID
      * @param request 펫 이름, 품종, 등록번호 등 상세 정보가 담긴 요청 객체
      * @return 생성된 펫의 ID와 성공 메시지를 포함한 응답 객체
-     * @throws com.dodo.backend.user.exception.UserException 사용자를 찾을 수 없는 경우
-     * @throws PetException  이미 존재하는 등록번호인 경우 (REGISTRATION_NUMBER_DUPLICATED)
+     * @throws PetException 사용자를 찾을 수 없거나(USER_NOT_FOUND), 이미 존재하는 등록번호인 경우
      */
     @Transactional
     @Override
     public PetRegisterResponse registerPet(UUID userId, PetRegisterRequest request) {
 
         log.info("반려동물 등록 시작 - userId: {}", userId);
-        userService.validateUserExists(userId);
+
+        if (!userRepository.existsById(userId)) {
+            throw new PetException(USER_NOT_FOUND);
+        }
 
         if (request.getRegistrationNumber() != null && !request.getRegistrationNumber().isBlank()) {
             if (petRepository.existsByRegistrationNumber(request.getRegistrationNumber())) {
@@ -101,7 +104,7 @@ public class PetServiceImpl implements PetService {
      * @param petId   수정할 반려동물의 ID
      * @param request 변경할 필드(이름, 나이, 체중 등)만 포함된 수정 요청 객체
      * @return 수정된 반려동물의 상세 정보를 담은 응답 객체
-     * @throws PetException 해당 ID의 반려동물이 없거나, 변경하려는 등록번호가 이미 존재하는 경우
+     * @throws PetException 해당 ID의 반려동물이 없거나(PET_NOT_FOUND), 변경하려는 등록번호가 이미 존재하는 경우
      */
     @Transactional
     @Override
@@ -146,7 +149,7 @@ public class PetServiceImpl implements PetService {
      * @param userId 코드를 요청한 사용자의 ID (권한 검증용)
      * @param petId  초대할 반려동물의 ID
      * @return 생성된 초대 코드와 만료 시간(초 단위)
-     * @throws PetException 반려동물이 존재하지 않는 경우
+     * @throws PetException 반려동물이 존재하지 않는 경우 (PET_NOT_FOUND)
      */
     @Transactional(readOnly = true)
     @Override
@@ -159,6 +162,7 @@ public class PetServiceImpl implements PetService {
         Map<String, Object> result = userPetService.generateInvitationCode(userId, petId);
 
         return PetInvitationResponse.builder()
+                .message("초대 코드가 생성되었습니다.")
                 .code((String) result.get("code"))
                 .expiresIn((Long) result.get("expiresIn"))
                 .build();
@@ -236,7 +240,7 @@ public class PetServiceImpl implements PetService {
                     .build();
         });
 
-        return PetListResponse.toDto(summaryPage);
+        return PetListResponse.toDto(summaryPage, "조회를 성공했습니다.");
     }
 
     /**
@@ -260,5 +264,87 @@ public class PetServiceImpl implements PetService {
         String resultMessage = userPetService.approveOrRejectFamilyMember(requesterId, petId, targetUserId, action);
 
         return PetFamilyApprovalResponse.toDto(petId, resultMessage);
+    }
+
+    /**
+     * 내가 관리하는 모든 반려동물에게 들어온 가족 신청(대기자) 목록을 페이징하여 조회합니다.
+     * <p>
+     * <ol>
+     * <li>{@link UserPetService}를 호출하여 내 펫들에 대한 PENDING 상태인 UserPet 엔티티 목록을 받아옵니다.</li>
+     * <li>목록에서 펫 ID들을 추출하여 {@link ImageFileService}를 통해 프로필 이미지 URL을 일괄 조회합니다.</li>
+     * <li>엔티티 목록을 순회하며 신청자 정보와 대상 펫 정보(이미지 포함)를 {@link PendingUserResponse} DTO로 변환합니다.</li>
+     * <li>최종적으로 페이징 정보가 포함된 {@link PendingUserListResponse} 객체를 반환합니다.</li>
+     * </ol>
+     *
+     * @param managerId 요청을 수행하는 관리자(기존 가족)의 UUID
+     * @param pageable  페이징 요청 정보
+     * @return 페이징된 승인 대기자 목록 응답 DTO
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public PendingUserListResponse getAllPendingUsers(UUID managerId, Pageable pageable) {
+
+        Map<String, Object> result = userPetService.getAllPendingUsers(managerId, pageable);
+        Page<UserPet> entityPage = (Page<UserPet>) result.get("pendingUserPage");
+
+        List<Long> petIds = entityPage.getContent().stream()
+                .map(userPet -> userPet.getPet().getPetId())
+                .collect(Collectors.toList());
+
+        Map<Long, String> imageMap = imageFileService.getProfileUrlsByPetIds(petIds);
+
+        Page<PendingUserResponse> dtoPage = entityPage.map(userPet ->
+                PendingUserResponse.toDto(
+                        userPet.getUser().getUsersId(),
+                        userPet.getUser().getNickname(),
+                        userPet.getUser().getProfileUrl(),
+                        userPet.getPet().getPetId(),
+                        userPet.getPet().getPetName(),
+                        imageMap.get(userPet.getPet().getPetId()),
+                        userPet.getRegistrationCreatedAt()
+                )
+        );
+
+        return PendingUserListResponse.toDto(dtoPage, "조회를 성공했습니다.");
+    }
+
+    /**
+     * 내가 가족 신청을 보낸 후 대기 중인 반려동물 목록을 페이징하여 조회합니다.
+     * <p>
+     * <ol>
+     * <li>{@link UserPetService}를 호출하여 내가 신청한(PENDING) UserPet 엔티티 목록을 Map 형태로 받아옵니다.</li>
+     * <li>목록에서 펫 ID들을 추출하여 {@link ImageFileService}를 통해 프로필 이미지 URL을 일괄 조회합니다.</li>
+     * <li>아직 가족이 아니므로 상세 정보 조회 없이, 펫의 기본 정보(ID, 이름, 이미지, 상태)만 {@link PetApplicationResponse} DTO로 변환합니다.</li>
+     * <li>최종적으로 페이징 정보가 포함된 {@link PetApplicationListResponse} 객체를 반환합니다.</li>
+     * </ol>
+     *
+     * @param userId   조회할 사용자의 UUID
+     * @param pageable 페이징 요청 정보
+     * @return 페이징된 신청 내역 목록 응답 DTO
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public PetApplicationListResponse getMyPendingApplications(UUID userId, Pageable pageable) {
+
+        Map<String, Object> result = userPetService.getMyPendingPets(userId, pageable);
+        Page<UserPet> entityPage = (Page<UserPet>) result.get("pendingPetPage");
+
+        List<Long> petIds = entityPage.getContent().stream()
+                .map(userPet -> userPet.getPet().getPetId())
+                .collect(Collectors.toList());
+
+        Map<Long, String> imageMap = imageFileService.getProfileUrlsByPetIds(petIds);
+
+        Page<PetApplicationResponse> dtoPage = entityPage.map(userPet ->
+                PetApplicationResponse.toDto(
+                        userPet.getPet().getPetId(),
+                        userPet.getPet().getPetName(),
+                        imageMap.get(userPet.getPet().getPetId()),
+                        userPet.getRegistrationStatus().name(),
+                        userPet.getRegistrationCreatedAt()
+                )
+        );
+
+        return PetApplicationListResponse.toDto(dtoPage, "조회를 성공했습니다.");
     }
 }

@@ -39,4 +39,24 @@ public interface UserPetRepository extends JpaRepository<UserPet, UserPetId> {
             RegistrationStatus status,
             Pageable pageable
     );
+
+    /**
+     * 관리자(요청자)가 APPROVED 상태로 소유하고 있는 모든 반려동물에 대해,
+     * 들어온 가족 신청(PENDING) 목록을 전체 조회합니다.
+     * <p>
+     * N+1 문제를 방지하기 위해 신청자(user)와 대상 펫(pet) 정보를 Fetch Join으로 함께 가져옵니다.
+     *
+     * @param managerId 관리자(현재 로그인한 유저)의 ID
+     * @param pageable  페이징 정보
+     * @return 관리하는 펫들에 대한 모든 승인 대기 내역
+     */
+    @Query("SELECT up FROM UserPet up " +
+            "JOIN FETCH up.user " +
+            "JOIN FETCH up.pet " +
+            "WHERE up.registrationStatus = 'PENDING' " +
+            "AND up.pet.petId IN (" +
+            "   SELECT my.pet.petId FROM UserPet my " +
+            "   WHERE my.user.usersId = :managerId AND my.registrationStatus = 'APPROVED'" +
+            ")")
+    Page<UserPet> findAllPendingRequestsByManager(@Param("managerId") UUID managerId, Pageable pageable);
 }

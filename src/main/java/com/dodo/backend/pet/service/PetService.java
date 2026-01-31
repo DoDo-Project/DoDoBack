@@ -25,7 +25,7 @@ public interface PetService {
     /**
      * 반려동물의 정보를 선택적으로 수정합니다.
      *
-     * @param petId  수정할 반려동물의 고유 ID
+     * @param petId   수정할 반려동물의 고유 ID
      * @param request 수정할 정보를 담은 요청 객체
      * @return 수정이 완료된 후의 최신 반려동물 상세 정보 응답 객체
      */
@@ -68,4 +68,22 @@ public interface PetService {
      * @return 펫 ID와 처리 결과 메시지
      */
     PetFamilyApprovalResponse manageFamily(UUID requesterId, Long petId, UUID targetUserId, String action);
+
+    /**
+     * 특정 반려동물에게 들어온 가족 신청 대기자 목록을 페이징하여 조회합니다.
+     *
+     * @param managerId 요청자(관리자)의 UUID
+     * @param pageable  페이징 정보
+     * @return 페이징된 대기자 목록 응답 DTO
+     */
+    PendingUserListResponse getAllPendingUsers(UUID managerId, Pageable pageable);
+
+    /**
+     * 내가 신청했지만 아직 승인 대기 중인 반려동물 목록을 페이징하여 조회합니다.
+     *
+     * @param userId   사용자의 UUID
+     * @param pageable 페이징 정보
+     * @return 페이징된 신청 내역 목록 응답 DTO
+     */
+    PetApplicationListResponse getMyPendingApplications(UUID userId, Pageable pageable);
 }

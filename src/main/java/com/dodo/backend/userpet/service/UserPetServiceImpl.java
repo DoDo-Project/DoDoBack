@@ -46,7 +46,7 @@ public class UserPetServiceImpl implements UserPetService {
     private static final String REDIS_PET_KEY_PREFIX = "invitation:pet:";
 
     /**
-     * 사용자와 반려동물 간의 관계(멤버십)를 생성하고 저장합니다.
+     * 사용자와 반려동물 간의 관계를 생성하고 저장합니다.
      * <p>
      * <b>처리 과정:</b>
      * <ol>
@@ -130,16 +130,6 @@ public class UserPetServiceImpl implements UserPetService {
         return result;
     }
 
-    /**
-     * 초대 코드를 확인하고 가족 등록(PENDING)을 수행합니다.
-     * <p>
-     * <ol>
-     * <li>Redis에서 입력된 코드를 조회하여 유효성을 검증하고, 매핑된 Pet ID를 가져옵니다. (없으면 예외 발생)</li>
-     * <li>사용자가 이미 해당 펫의 가족으로 등록되어 있는지 중복 여부를 확인합니다.</li>
-     * <li>Pet 엔티티 조회를 생략하고, ID만 포함된 Proxy Pet 객체를 생성합니다.</li>
-     * <li>{@link #registerUserPet}을 호출하여 사용자를 대기(PENDING) 상태로 등록합니다.</li>
-     * </ol>
-     */
     /**
      * 초대 코드를 확인하고 가족 등록(PENDING)을 수행합니다.
      * <p>
@@ -249,5 +239,57 @@ public class UserPetServiceImpl implements UserPetService {
         log.info("가족 요청 처리 완료 - PetId: {}, TargetUser: {}, Status: {}", petId, targetUserId, action);
 
         return message;
+    }
+
+    /**
+     * [관리자용] 관리자가 소유한 모든 반려동물에 대해 들어온 승인 대기(PENDING) 유저 목록을 조회합니다.
+     * <p>
+     * <ol>
+     * <li>별도의 petId 검증 없이, 리포지토리 쿼리를 통해 '내가 관리자인 펫'들의 요청만 필터링하여 조회합니다.</li>
+     * <li>조회된 Entity Page를 Map에 담아 반환합니다.</li>
+     * </ol>
+     *
+     * @param managerId 요청을 수행하는 관리자(기존 가족)의 UUID
+     * @param pageable  페이징 정보
+     * @return "pendingUserPage" 키에 {@code Page<UserPet>} 엔티티가 담긴 Map 객체
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Object> getAllPendingUsers(UUID managerId, Pageable pageable) {
+
+        Page<UserPet> pendingUserPage = userPetRepository.findAllPendingRequestsByManager(managerId, pageable);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("pendingUserPage", pendingUserPage);
+
+        return result;
+    }
+
+    /**
+     * 사용자가 신청했으나 아직 승인되지 않은(PENDING) 반려동물 목록을 조회합니다.
+     * <p>
+     * <ol>
+     * <li>리포지토리를 통해 해당 유저의 PENDING 상태인 {@link UserPet} 목록을 페이징 조회합니다.</li>
+     * <li>조회된 Entity Page를 Map에 담아 반환합니다.</li>
+     * </ol>
+     *
+     * @param userId   조회할 사용자의 UUID
+     * @param pageable 페이징 정보
+     * @return "pendingPetPage" 키에 {@code Page<UserPet>} 엔티티가 담긴 Map 객체
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Object> getMyPendingPets(UUID userId, Pageable pageable) {
+
+        Page<UserPet> pendingPetPage = userPetRepository.findAllByUser_UsersIdAndRegistrationStatus(
+                userId,
+                RegistrationStatus.PENDING,
+                pageable
+        );
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("pendingPetPage", pendingPetPage);
+
+        return result;
     }
 }

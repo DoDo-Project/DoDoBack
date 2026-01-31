@@ -2,6 +2,8 @@ package com.dodo.backend.userpet.service;
 
 import com.dodo.backend.pet.entity.Pet;
 import com.dodo.backend.userpet.entity.RegistrationStatus;
+import com.dodo.backend.userpet.entity.UserPet;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.Map;
@@ -65,4 +67,22 @@ public interface UserPetService {
      * @return 처리 결과 메시지
      */
     String approveOrRejectFamilyMember(UUID requesterId, Long petId, UUID targetUserId, String action);
+
+    /**
+     * 특정 반려동물에게 신청된 승인 대기(PENDING) 상태의 유저 목록을 조회합니다.
+     *
+     * @param managerId 요청을 수행하는 관리자(기존 가족)의 UUID
+     * @param pageable  페이징 정보
+     * @return "pendingUserPage" 키에 Page&lt;UserPet&gt; 엔티티가 담긴 Map 객체
+     */
+    Map<String, Object> getAllPendingUsers(UUID managerId, Pageable pageable);
+
+    /**
+     * 사용자가 신청했으나 아직 승인되지 않은(PENDING) 반려동물 목록을 조회합니다.
+     *
+     * @param userId   조회할 사용자의 UUID
+     * @param pageable 페이징 정보
+     * @return "pendingPetPage" 키에 Page&lt;UserPet&gt; 엔티티가 담긴 Map 객체
+     */
+    Map<String, Object> getMyPendingPets(UUID userId, Pageable pageable);
 }

@@ -2,16 +2,17 @@ package com.dodo.backend.userpet.service;
 
 import com.dodo.backend.common.util.VerificationCodeGenerator;
 import com.dodo.backend.pet.entity.Pet;
-import com.dodo.backend.pet.service.PetService;
 import com.dodo.backend.user.entity.User;
-import com.dodo.backend.user.service.UserService;
+import com.dodo.backend.user.exception.UserException;
+import com.dodo.backend.user.repository.UserRepository;
 import com.dodo.backend.userpet.entity.RegistrationStatus;
 import com.dodo.backend.userpet.entity.UserPet;
 import com.dodo.backend.userpet.entity.UserPet.UserPetId;
 import com.dodo.backend.userpet.exception.UserPetException;
+import com.dodo.backend.userpet.mapper.UserPetMapper;
 import com.dodo.backend.userpet.repository.UserPetRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.dodo.backend.user.exception.UserErrorCode.USER_NOT_FOUND;
 import static com.dodo.backend.userpet.exception.UserPetErrorCode.*;
 
 /**
@@ -31,50 +33,38 @@ import static com.dodo.backend.userpet.exception.UserPetErrorCode.*;
  */
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class UserPetServiceImpl implements UserPetService {
 
     private final UserPetRepository userPetRepository;
-    private final PetService petService;
+    private final UserRepository userRepository;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final UserService userService;
+    private final UserPetMapper userPetMapper;
 
     private static final long EXPIRATION_MINUTES = 15;
     private static final String REDIS_CODE_KEY_PREFIX = "invitation:code:";
     private static final String REDIS_PET_KEY_PREFIX = "invitation:pet:";
 
     /**
-     * 생성자 주입 방식을 사용하되, {@link PetService}와의 순환 참조 문제를 방지하기 위해
-     * {@code @Lazy} 어노테이션을 사용하여 의존성을 지연 주입합니다.
-     */
-    public UserPetServiceImpl(UserPetRepository userPetRepository,
-                              @Lazy PetService petService,
-                              RedisTemplate<String, Object> redisTemplate,
-                              UserService userService) {
-        this.userPetRepository = userPetRepository;
-        this.petService = petService;
-        this.redisTemplate = redisTemplate;
-        this.userService = userService;
-    }
-
-    /**
      * 사용자와 반려동물 간의 관계(멤버십)를 생성하고 저장합니다.
      * <p>
      * <b>처리 과정:</b>
      * <ol>
-     * <li>사용자 ID로 User 엔티티를 조회합니다.</li>
+     * <li>{@link UserRepository}를 사용하여 User 엔티티를 직접 조회합니다. (존재하지 않을 경우 예외 발생)</li>
      * <li>User ID와 Pet ID를 조합하여 복합키({@link UserPetId})를 생성합니다.</li>
      * <li>전달받은 상태값(APPROVED, PENDING 등)을 포함하여 {@link UserPet} 엔티티를 빌드하고 저장합니다.</li>
      * </ol>
      *
      * @param userId 관계를 맺을 사용자의 UUID
-     * @param pet    관계를 맺을 반려동물 엔티티
+     * @param pet    관계를 맺을 반려동물 엔티티 (또는 Proxy 객체)
      * @param status 초기 등록 상태
+     * @throws UserException 해당 사용자가 존재하지 않을 경우
      */
     @Transactional
     @Override
     public void registerUserPet(UUID userId, Pet pet, RegistrationStatus status) {
-
-        User user = userService.getUserEntity(userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
         UserPetId userPetId = new UserPetId(user.getUsersId(), pet.getPetId());
 
@@ -93,8 +83,8 @@ public class UserPetServiceImpl implements UserPetService {
      * <p>
      * <b>처리 과정:</b>
      * <ol>
-     * <li>요청한 사용자가 해당 펫의 가족 구성원인지, 그리고 '승인된(APPROVED)' 상태인지 검증합니다.</li>
-     * <li>이미 발급된 유효한 초대 코드가 있는지 Redis를 통해 확인하여 중복 발급을 방지합니다.</li>
+     * <li>요청한 사용자가 해당 펫의 가족 구성원이며, '승인된(APPROVED)' 상태인지 검증합니다.</li>
+     * <li>해당 펫에 대해 이미 발급된 유효한 초대 코드가 있는지 Redis를 통해 확인하여 중복 발급을 방지합니다.</li>
      * <li>6자리의 랜덤 초대 코드를 생성합니다.</li>
      * <li>초대 코드 검증을 위한 키(code:petId)와 중복 방지용 키(petId:code)를 Redis에 저장합니다. (유효기간 15분)</li>
      * </ol>
@@ -102,18 +92,14 @@ public class UserPetServiceImpl implements UserPetService {
      * @param userId 요청한 사용자의 UUID
      * @param petId  초대 코드를 생성할 반려동물 ID
      * @return 생성된 코드와 만료 시간이 담긴 Map
-     * @throws UserPetException 권한이 없거나 이미 코드가 존재하는 경우
+     * @throws UserPetException 권한이 없거나 이미 유효한 코드가 존재하는 경우
      */
     @Transactional(readOnly = true)
     @Override
     public Map<String, Object> generateInvitationCode(UUID userId, Long petId) {
-
         UserPet userPet = userPetRepository.findById(new UserPet.UserPetId(userId, petId))
+                .filter(up -> up.getRegistrationStatus() == RegistrationStatus.APPROVED)
                 .orElseThrow(() -> new UserPetException(INVITE_PERMISSION_DENIED));
-
-        if (userPet.getRegistrationStatus() != RegistrationStatus.APPROVED) {
-            throw new UserPetException(INVITE_PERMISSION_DENIED);
-        }
 
         String petKey = REDIS_PET_KEY_PREFIX + petId;
         if (Boolean.TRUE.equals(redisTemplate.hasKey(petKey))) {
@@ -145,26 +131,28 @@ public class UserPetServiceImpl implements UserPetService {
     }
 
     /**
-     * 초대 코드를 통해 가족 구성원으로 등록합니다.
+     * 초대 코드를 확인하고 가족 등록(PENDING)을 수행합니다.
      * <p>
-     * <b>처리 과정:</b>
      * <ol>
-     * <li>Redis에서 입력된 코드를 조회하여 유효성을 검증하고, 매핑된 Pet ID를 가져옵니다.</li>
+     * <li>Redis에서 입력된 코드를 조회하여 유효성을 검증하고, 매핑된 Pet ID를 가져옵니다. (없으면 예외 발생)</li>
      * <li>사용자가 이미 해당 펫의 가족으로 등록되어 있는지 중복 여부를 확인합니다.</li>
-     * <li>{@link PetService#getPet}을 호출하여 Pet 엔티티를 조회합니다. (직접 리포지토리 접근 X)</li>
-     * <li>{@link #registerUserPet}을 호출하여 사용자를 승인(APPROVED) 상태로 등록합니다.</li>
-     * <li>갱신된 가족 구성원 목록을 DB에서 조회하여 반환합니다.</li>
+     * <li>Pet 엔티티 조회를 생략하고, ID만 포함된 Proxy Pet 객체를 생성합니다.</li>
+     * <li>{@link #registerUserPet}을 호출하여 사용자를 대기(PENDING) 상태로 등록합니다.</li>
      * </ol>
-     *
-     * @param userId 코드를 입력한 사용자의 UUID
-     * @param code   사용자가 입력한 6자리 코드
-     * @return 펫 엔티티와 가족 목록이 담긴 Map
-     * @throws UserPetException 코드가 유효하지 않거나, 이미 가족인 경우
+     */
+    /**
+     * 초대 코드를 확인하고 가족 등록(PENDING)을 수행합니다.
+     * <p>
+     * <ol>
+     * <li>Redis에서 입력된 코드를 조회하여 유효성을 검증하고, 매핑된 Pet ID를 가져옵니다. (없으면 예외 발생)</li>
+     * <li>사용자가 이미 해당 펫의 가족으로 등록되어 있는지 중복 여부를 확인합니다.</li>
+     * <li>Pet 엔티티 조회를 생략하고, ID만 포함된 Proxy Pet 객체를 생성합니다.</li>
+     * <li>{@link #registerUserPet}을 호출하여 사용자를 대기(PENDING) 상태로 등록합니다.</li>
+     * </ol>
      */
     @Transactional
     @Override
-    public Map<String, Object> joinFamilyByCode(UUID userId, String code) {
-
+    public Long registerByInvitation(UUID userId, String code) {
         String petIdStr = (String) redisTemplate.opsForValue().get(REDIS_CODE_KEY_PREFIX + code);
 
         if (petIdStr == null) {
@@ -177,24 +165,17 @@ public class UserPetServiceImpl implements UserPetService {
             throw new UserPetException(ALREADY_FAMILY_MEMBER);
         }
 
-        Pet pet = petService.getPet(petId);
+        Pet petRef = Pet.builder().petId(petId).build();
 
-        this.registerUserPet(userId, pet, RegistrationStatus.APPROVED);
-        log.info("가족 초대 코드 수락 완료 - User: {}, PetId: {}", userId, petId);
+        this.registerUserPet(userId, petRef, RegistrationStatus.PENDING);
+        log.info("가족 초대 요청 (대기) - User: {}, PetId: {}", userId, petId);
 
-        List<UserPet> familyMembers = userPetRepository.findAllByPetId(petId);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("pet", pet);
-        result.put("members", familyMembers);
-
-        return result;
+        return petId;
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * <b>처리 과정:</b>
      * <ol>
      * <li>리포지토리를 호출하여 특정 사용자와 연결된 {@link UserPet} 목록을 페이징 조회합니다.</li>
      * <li>이때, 성능 최적화를 위해 연관된 {@link com.dodo.backend.pet.entity.Pet} 엔티티를 함께 로딩(Fetch Join)합니다.</li>
@@ -208,12 +189,65 @@ public class UserPetServiceImpl implements UserPetService {
     @Transactional(readOnly = true)
     @Override
     public Map<String, Object> getUserPets(UUID userId, Pageable pageable) {
-
-        Page<UserPet> userPetPage = userPetRepository.findAllByUser_UsersId(userId, pageable);
+        Page<UserPet> userPetPage = userPetRepository.findAllByUser_UsersIdAndRegistrationStatus(
+                userId,
+                RegistrationStatus.APPROVED,
+                pageable
+        );
 
         Map<String, Object> result = new HashMap<>();
         result.put("userPetPage", userPetPage);
 
         return result;
+    }
+
+    /**
+     * 대기 중인(PENDING) 가족 등록 요청을 승인하거나 거절합니다.
+     * <p>
+     * <ol>
+     * <li><b>권한 및 대상 검증:</b> {@code filter}를 사용하여 요청자({@code requesterId})가 승인된(APPROVED) 가족인지,
+     * 대상({@code targetUserId})이 대기(PENDING) 상태인지 검증합니다. (조건 불만족 시 예외 발생)</li>
+     * <li><b>요청 처리:</b> 입력된 {@code action} 문자열에 따라 분기 처리합니다.
+     * <ul>
+     * <li>{@code "REJECTED"}: 해당 요청 내역을 삭제하고 거절 메시지를 반환합니다. (Early Return)</li>
+     * <li>{@code "APPROVED"}: 상태를 승인으로 변경하여 저장하고 승인 메시지를 반환합니다.</li>
+     * <li>그 외: 유효하지 않은 요청으로 간주하여 예외를 발생시킵니다.</li>
+     * </ul>
+     * </li>
+     * </ol>
+     *
+     * @param requesterId 요청을 수행하는 관리자(기존 가족 구성원)의 UUID
+     * @param petId       반려동물 식별자(ID)
+     * @param targetUserId 승인 또는 거절할 대상 유저의 UUID
+     * @param action      처리할 상태 문자열 ("APPROVED" 또는 "REJECTED")
+     * @return 처리 결과 메시지 ("가족 신청을 승인했습니다." 또는 "가족 신청을 거절했습니다.")
+     * @throws UserPetException 권한이 없거나, 대상이 없거나, 유효하지 않은 요청 상태일 경우 발생
+     */
+    @Transactional
+    @Override
+    public String approveOrRejectFamilyMember(UUID requesterId, Long petId, UUID targetUserId, String action) {
+
+        userPetRepository.findById(new UserPetId(requesterId, petId))
+                .filter(up -> up.getRegistrationStatus() == RegistrationStatus.APPROVED)
+                .orElseThrow(() -> new UserPetException(INVITE_PERMISSION_DENIED));
+
+        userPetRepository.findById(new UserPetId(targetUserId, petId))
+                .filter(up -> up.getRegistrationStatus() == RegistrationStatus.PENDING)
+                .orElseThrow(() -> new UserPetException(INVITEE_NOT_FOUND));
+
+        String message;
+        if ("APPROVED".equals(action)) {
+            message = "가족 신청을 승인했습니다.";
+        } else if ("REJECTED".equals(action)) {
+            message = "가족 신청을 거절했습니다.";
+        } else {
+            throw new UserPetException(INVALID_REQUEST);
+        }
+
+        userPetMapper.updateRegistrationStatus(targetUserId, petId, action);
+
+        log.info("가족 요청 처리 완료 - PetId: {}, TargetUser: {}, Status: {}", petId, targetUserId, action);
+
+        return message;
     }
 }

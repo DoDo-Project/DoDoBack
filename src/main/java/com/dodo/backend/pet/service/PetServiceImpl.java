@@ -5,14 +5,12 @@ import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
 import com.dodo.backend.pet.dto.response.PetResponse.*;
-import com.dodo.backend.pet.dto.response.PetResponse.PetFamilyJoinResponse.FamilyMemberList;
 import com.dodo.backend.pet.dto.response.PetResponse.PetListResponse.PetSummary;
 import com.dodo.backend.pet.entity.Pet;
 import com.dodo.backend.pet.exception.PetException;
 import com.dodo.backend.pet.mapper.PetMapper;
 import com.dodo.backend.pet.repository.PetRepository;
 import com.dodo.backend.petweight.service.PetWeightService;
-import com.dodo.backend.user.exception.UserException;
 import com.dodo.backend.user.service.UserService;
 import com.dodo.backend.userpet.entity.RegistrationStatus;
 import com.dodo.backend.userpet.entity.UserPet;
@@ -54,7 +52,6 @@ public class PetServiceImpl implements PetService {
     /**
      * 사용자의 요청 정보를 기반으로 반려동물을 등록하고, 소유자 관계를 설정합니다.
      * <p>
-     * <b>처리 과정:</b>
      * <ol>
      * <li>사용자 ID(UUID)의 유효성을 검사합니다. (존재하지 않는 경우 예외 발생)</li>
      * <li>요청된 등록번호가 이미 존재하는지 중복 여부를 확인합니다.</li>
@@ -65,7 +62,7 @@ public class PetServiceImpl implements PetService {
      * @param userId  펫을 등록하는 사용자의 UUID
      * @param request 펫 이름, 품종, 등록번호 등 상세 정보가 담긴 요청 객체
      * @return 생성된 펫의 ID와 성공 메시지를 포함한 응답 객체
-     * @throws UserException 사용자를 찾을 수 없는 경우
+     * @throws com.dodo.backend.user.exception.UserException 사용자를 찾을 수 없는 경우
      * @throws PetException  이미 존재하는 등록번호인 경우 (REGISTRATION_NUMBER_DUPLICATED)
      */
     @Transactional
@@ -94,9 +91,8 @@ public class PetServiceImpl implements PetService {
     /**
      * 기존 반려동물의 프로필 정보를 수정합니다.
      * <p>
-     * <b>처리 과정:</b>
      * <ol>
-     * <li>{@link #getPet(Long)}을 통해 수정할 반려동물 엔티티를 조회합니다.</li>
+     * <li>저장소(Repository)를 통해 수정할 반려동물 엔티티를 직접 조회합니다.</li>
      * <li>등록번호 변경 요청이 있는 경우, 해당 번호의 중복 여부를 검사합니다.</li>
      * <li>MyBatis Mapper를 호출하여 값이 존재하는 필드만 동적으로 업데이트(Dynamic Update)합니다.</li>
      * <li>수정 완료된 최신 정보를 포함한 응답 객체를 반환합니다.</li>
@@ -111,7 +107,8 @@ public class PetServiceImpl implements PetService {
     @Override
     public PetUpdateResponse updatePet(Long petId, PetUpdateRequest request) {
 
-        Pet pet = getPet(petId);
+        Pet pet = petRepository.findById(petId)
+                .orElseThrow(() -> new PetException(PET_NOT_FOUND));
 
         if (request.getRegistrationNumber() != null && !Objects.equals(pet.getRegistrationNumber(), request.getRegistrationNumber())) {
             if (petRepository.existsByRegistrationNumber(request.getRegistrationNumber())) {
@@ -140,9 +137,8 @@ public class PetServiceImpl implements PetService {
     /**
      * 가족 초대를 위한 1회용 인증 코드를 생성합니다.
      * <p>
-     * <b>처리 과정:</b>
      * <ol>
-     * <li>{@link #getPet(Long)}을 호출하여 대상 반려동물의 존재 여부를 우선 검증합니다.</li>
+     * <li>대상 반려동물의 존재 여부를 우선 검증합니다. (엔티티 조회 없이 존재 여부만 확인하여 성능 최적화)</li>
      * <li>실제 코드 생성 및 Redis 저장 로직은 {@link UserPetService}에 위임합니다.</li>
      * <li>생성된 6자리 코드와 유효 시간을 반환받아 응답 객체로 변환합니다.</li>
      * </ol>
@@ -156,7 +152,9 @@ public class PetServiceImpl implements PetService {
     @Override
     public PetInvitationResponse issueInvitationCode(UUID userId, Long petId) {
 
-        getPet(petId);
+        if (!petRepository.existsById(petId)) {
+            throw new PetException(PET_NOT_FOUND);
+        }
 
         Map<String, Object> result = userPetService.generateInvitationCode(userId, petId);
 
@@ -167,61 +165,28 @@ public class PetServiceImpl implements PetService {
     }
 
     /**
-     * 초대 코드를 입력하여 사용자를 가족 구성원으로 등록합니다.
+     * 초대 코드를 입력하여 가족 등록을 신청(승인 대기)합니다.
      * <p>
-     * <b>처리 과정:</b>
      * <ol>
-     * <li>{@link UserPetService#joinFamilyByCode}를 호출하여 코드 검증 및 멤버십 등록을 수행합니다.</li>
-     * <li>반환된 결과 Map에서 펫 엔티티와 가족 구성원 목록(List&lt;UserPet&gt;)을 추출합니다.</li>
-     * <li>엔티티 리스트를 클라이언트 응답용 DTO인 {@link FamilyMemberList}로 변환합니다.</li>
-     * <li>최종적으로 펫 정보와 가족 목록을 포함한 응답 객체를 반환합니다.</li>
+     * <li>{@link UserPetService#registerByInvitation}를 호출하여 코드 검증 및 PENDING 상태 등록을 수행합니다.</li>
+     * <li>등록된 펫 ID를 반환받아 신청 성공 메시지와 함께 응답 객체로 변환합니다.</li>
      * </ol>
      *
-     * @param userId  초대 코드를 입력한 사용자의 ID
-     * @param request 6자리 초대 코드가 포함된 요청 객체
-     * @return 참여한 펫의 정보와 갱신된 가족 구성원 목록
+     * @param userId  요청한 사용자의 ID
+     * @param request 초대 코드가 포함된 요청 DTO
+     * @return 신청된 펫 ID와 처리 결과 메시지
      */
     @Transactional
     @Override
-    public PetFamilyJoinResponse joinFamily(UUID userId, PetFamilyJoinRequest request) {
+    public PetFamilyJoinRequestResponse applyForFamily(UUID userId, PetFamilyJoinRequest request) {
 
-        Map<String, Object> result = userPetService.joinFamilyByCode(userId, request.getCode());
+        Long petId = userPetService.registerByInvitation(userId, request.getCode());
 
-        Pet pet = (Pet) result.get("pet");
-
-        List<UserPet> members = (List<UserPet>) result.get("members");
-
-        List<FamilyMemberList> memberDto = members.stream()
-                .map(up -> FamilyMemberList.builder()
-                        .userId(up.getUser().getUsersId())
-                        .nickname(up.getUser().getNickname())
-                        .profileUrl(up.getUser().getProfileUrl())
-                        .build())
-                .collect(Collectors.toList());
-
-        return PetFamilyJoinResponse.toDto(pet.getPetId(), pet.getPetName(), memberDto);
+        return PetFamilyJoinRequestResponse.toDto(petId, "가족 등록을 신청했습니다. 승인을 기다려주세요.");
     }
 
     /**
-     * ID를 기반으로 Pet 엔티티를 조회합니다.
-     * <p>
-     * 단순히 Repository를 호출하는 것을 넘어, 데이터가 없을 경우
-     * {@link PetException}(PET_NOT_FOUND)을 발생시키는 역할을 수행합니다.
-     * 다른 도메인 서비스에서 Pet 엔티티가 필요할 때 이 메소드를 사용합니다.
-     *
-     * @param petId 조회할 반려동물의 ID
-     * @return 조회된 Pet 엔티티 (null 아님)
-     * @throws PetException ID에 해당하는 반려동물이 존재하지 않을 경우
-     */
-    @Transactional(readOnly = true)
-    @Override
-    public Pet getPet(Long petId) {
-        return petRepository.findById(petId)
-                .orElseThrow(() -> new PetException(PET_NOT_FOUND));
-    }
-
-    /**
-     * {@inheritDoc}
+     * 사용자의 반려동물 목록을 페이징하여 조회합니다.
      * <p>
      * <ol>
      * <li>{@link UserPetService}를 통해 페이징 된 펫 목록({@code Page<UserPet>})을 조회합니다.</li>
@@ -231,6 +196,10 @@ public class PetServiceImpl implements PetService {
      * <li>Entity 목록을 순회하며 체중 및 이미지 URL을 매핑하여 {@link PetSummary} DTO로 변환합니다.</li>
      * <li>최종적으로 페이징 정보가 포함된 응답 객체를 반환합니다.</li>
      * </ol>
+     *
+     * @param userId   조회할 사용자의 ID
+     * @param pageable 페이징 요청 정보
+     * @return 페이징 처리된 반려동물 목록 응답 DTO
      */
     @Transactional(readOnly = true)
     @Override
@@ -268,5 +237,28 @@ public class PetServiceImpl implements PetService {
         });
 
         return PetListResponse.toDto(summaryPage);
+    }
+
+    /**
+     * 대기 중인 가족 등록 요청을 승인하거나 거절합니다.
+     * <p>
+     * <ol>
+     * <li>{@link UserPetService#approveOrRejectFamilyMember}를 호출하여 실제 상태 변경 로직을 위임합니다.</li>
+     * <li>처리 결과 메시지를 반환받아 DTO에 담아 응답합니다.</li>
+     * </ol>
+     *
+     * @param requesterId  요청을 수행하는 관리자(기존 가족) ID
+     * @param petId        반려동물 ID
+     * @param targetUserId 승인/거절 대상 유저 ID
+     * @param action       처리할 상태 문자열 ("APPROVED" 또는 "REJECTED")
+     * @return 펫 ID와 처리 결과 메시지가 담긴 응답 DTO
+     */
+    @Transactional
+    @Override
+    public PetFamilyApprovalResponse manageFamily(UUID requesterId, Long petId, UUID targetUserId, String action) {
+
+        String resultMessage = userPetService.approveOrRejectFamilyMember(requesterId, petId, targetUserId, action);
+
+        return PetFamilyApprovalResponse.toDto(petId, resultMessage);
     }
 }

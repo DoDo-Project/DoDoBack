@@ -292,16 +292,4 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     * <p>
-     * JPA 영속성 컨텍스트가 관리하는 엔티티를 반환하여,
-     * 다른 도메인(Pet, UserPet 등)에서 연관관계를 맺을 때 사용하도록 합니다.
-     */
-    @Transactional(readOnly = true)
-    @Override
-    public User getUserEntity(UUID userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
-    }
 }

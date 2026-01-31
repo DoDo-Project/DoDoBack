@@ -1,17 +1,13 @@
 package com.dodo.backend.user.service;
 
-import com.dodo.backend.user.dto.request.UserRequest;
 import com.dodo.backend.user.dto.request.UserRequest.UserRegisterRequest;
-import com.dodo.backend.user.dto.response.UserResponse;
+import com.dodo.backend.user.dto.request.UserRequest.UserUpdateRequest;
 import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserUpdateResponse;
-import com.dodo.backend.user.entity.User;
 
 import java.util.Map;
 import java.util.UUID;
-
-import static com.dodo.backend.user.dto.request.UserRequest.*;
 
 /**
  * 사용자 정보 관리 및 회원 관련 비즈니스 로직을 담당하는 서비스 인터페이스입니다.
@@ -23,9 +19,6 @@ public interface UserService {
 
     /**
      * 회원가입 시 수집되는 사용자의 추가 정보를 시스템에 등록합니다.
-     * <p>
-     * 소셜 로그인 이후 서비스 이용에 필요한 최소한의 프로필 정보를 저장하고,
-     * 정식 회원으로의 전환 처리를 수행합니다.
      *
      * @param request 등록할 사용자 추가 정보 DTO
      * @param email 정보를 등록할 대상 사용자의 이메일 주소
@@ -35,9 +28,6 @@ public interface UserService {
 
     /**
      * 외부 소셜 제공자로부터 전달받은 정보를 기반으로 유저를 조회하거나 신규 등록합니다.
-     * <p>
-     * 시스템에 이미 존재하는 이메일인 경우 해당 유저 정보를 반환하며,
-     * 존재하지 않는 경우 신규 유저로 생성하여 데이터베이스에 영속화합니다.
      *
      * @param email 소셜 계정의 이메일 주소
      * @param name 사용자의 이름 또는 별명
@@ -56,9 +46,6 @@ public interface UserService {
 
     /**
      * 계정 탈퇴를 위한 본인 확인 인증 메일 발송을 요청합니다.
-     * <p>
-     * 내부적으로 메일 서비스를 호출하여 보안 인증 코드를 발송하며,
-     * 탈퇴 절차의 첫 번째 단계인 본인 확인 프로세스를 시작합니다.
      *
      * @param userId 탈퇴 인증을 진행할 사용자의 아이디
      */
@@ -74,9 +61,6 @@ public interface UserService {
 
     /**
      * 기존 사용자의 프로필 정보(닉네임, 지역, 가족 여부)를 수정합니다.
-     * <p>
-     * 변경을 원하는 항목만 선택적으로 업데이트할 수 있으며,
-     * 닉네임 변경 시 시스템 내 중복 여부를 사전에 검증합니다.
      *
      * @param userId  정보를 수정할 사용자의 고유 ID
      * @param request 수정할 항목들이 담긴 DTO 객체
@@ -86,8 +70,6 @@ public interface UserService {
 
     /**
      * 사용자의 알림 수신 설정(ON/OFF)을 변경합니다.
-     * <p>
-     * 변경하고자 하는 알림 수신 여부 값을 받아, 해당 사용자의 설정 상태를 즉시 갱신합니다.
      *
      * @param userId  설정을 변경할 사용자의 고유 식별자(UUID)
      * @param enabled 변경할 알림 수신 여부 (true: 수신 허용, false: 수신 거부)
@@ -96,24 +78,9 @@ public interface UserService {
 
     /**
      * 사용자의 존재 여부를 검증합니다.
-     * <p>
-     * 반환값 없이 단순히 해당 ID를 가진 사용자가 DB에 존재하는지만 확인하며,
-     * 존재하지 않을 경우 예외를 발생시킵니다.
-     * 타 도메인(Pet 등)에서 유저 ID의 유효성을 검사할 때 사용합니다.
      *
      * @param userId 검증할 사용자의 고유 식별자(UUID)
      * @throws com.dodo.backend.user.exception.UserException 유저가 존재하지 않을 경우 (USER_NOT_FOUND)
      */
     void validateUserExists(UUID userId);
-
-    /**
-     * 내부 로직 처리를 위해 User 엔티티 객체를 직접 조회합니다.
-     * <p>
-     * DTO가 아닌 엔티티 객체가 필요한 경우(예: JPA 연관관계 매핑)에 사용됩니다.
-     *
-     * @param userId 조회할 사용자의 고유 식별자(UUID)
-     * @return 조회된 User 엔티티 객체
-     * @throws com.dodo.backend.user.exception.UserException 유저가 존재하지 않을 경우 (USER_NOT_FOUND)
-     */
-    User getUserEntity(UUID userId);
 }

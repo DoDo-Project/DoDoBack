@@ -1,11 +1,10 @@
 package com.dodo.backend.pet.controller;
 
 import com.dodo.backend.common.exception.ErrorResponse;
-import com.dodo.backend.pet.dto.request.PetRequest;
+import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyApprovalRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
-import com.dodo.backend.pet.dto.response.PetResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.*;
 import com.dodo.backend.pet.service.PetService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -183,19 +182,19 @@ public class PetController {
     }
 
     /**
-     * 초대 코드를 입력하여 반려동물 가족 그룹에 참여합니다.
+     * 초대 코드를 입력하여 반려동물 가족 그룹에 참여를 신청합니다.
      * <p>
-     * 유효한 코드인 경우 즉시 가족(APPROVED)으로 등록되며,
-     * 해당 반려동물의 정보와 현재 가족 구성원 목록을 응답합니다.
+     * 유효한 코드인 경우 대기(PENDING) 상태로 등록되며,
+     * 신청된 <b>펫 ID</b>와 <b>승인 대기 메시지</b>를 반환합니다.
      *
      * @param request     6자리 초대 코드가 담긴 요청 객체
      * @param userDetails 인증된 사용자 정보
-     * @return 참여한 펫 정보와 전체 가족 구성원 목록 (HTTP 200)
+     * @return 펫 ID와 처리 결과 메시지 (HTTP 200)
      */
-    @Operation(summary = "가족 초대 수락", description = "초대 코드를 입력하여 해당 반려동물의 가족으로 등록됩니다.")
+    @Operation(summary = "가족 초대 수락 신청", description = "초대 코드를 입력하여 해당 반려동물의 가족으로 등록을 신청합니다 (승인 대기)")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "가족 등록 성공",
-                    content = @Content(schema = @Schema(implementation = PetFamilyJoinResponse.class))),
+            @ApiResponse(responseCode = "200", description = "신청 성공",
+                    content = @Content(schema = @Schema(implementation = PetFamilyJoinRequestResponse.class))),
             @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
@@ -213,14 +212,67 @@ public class PetController {
                             examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
     })
     @PostMapping("/family")
-    public ResponseEntity<PetFamilyJoinResponse> joinFamily(
+    public ResponseEntity<PetFamilyJoinRequestResponse> joinFamily(
             @Valid @RequestBody PetFamilyJoinRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         UUID userId = UUID.fromString(userDetails.getUsername());
         log.info("가족 초대 수락 요청 - User: {}, Code: {}", userId, request.getCode());
 
-        return ResponseEntity.ok(petService.joinFamily(userId, request));
+        return ResponseEntity.ok(petService.applyForFamily(userId, request));
+    }
+
+    /**
+     * 대기 중인 가족 등록 요청을 승인하거나 거절합니다.
+     * <p>
+     * 관리자(기존 가족 구성원)는 대기(PENDING) 상태인 요청을 승인하여 정식 구성원으로 등록하거나,
+     * 거절하여 요청 목록에서 삭제할 수 있습니다.
+     *
+     * @param request     승인/거절 처리에 필요한 요청 정보
+     * @param userDetails 인증된 사용자 정보
+     * @return 처리 결과 메시지 JSON
+     */
+    @Operation(summary = "가족 요청 승인/거절", description = "대기 중인 가족 등록 요청을 승인하거나 거절합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "신청 성공",
+                    content = @Content(schema = @Schema(implementation = PetFamilyApprovalResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "403", description = "승인 권한 없음",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "403 Forbidden", value = "{\"status\": 403, \"message\": \"승인 권한이 없습니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "대상 유저 또는 요청을 찾을 수 없음",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"대상 유저 또는 요청을 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "409", description = "이미 가족으로 등록되어있습니다.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "409 Conflict", value = "{\"status\": 409, \"message\": \"이미 가족으로 등록되어있습니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @PostMapping("/family/approval")
+    public ResponseEntity<PetFamilyApprovalResponse> handleFamilyApproval(
+            @Valid @RequestBody PetFamilyApprovalRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        UUID requesterId = UUID.fromString(userDetails.getUsername());
+
+        return ResponseEntity.ok(petService.manageFamily(
+                requesterId,
+                request.getPetId(),
+                request.getTargetUserId(),
+                request.getAction()
+        ));
     }
 
     /**

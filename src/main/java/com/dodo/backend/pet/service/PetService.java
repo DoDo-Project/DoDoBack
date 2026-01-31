@@ -3,9 +3,7 @@ package com.dodo.backend.pet.service;
 import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
-import com.dodo.backend.pet.dto.response.PetResponse;
 import com.dodo.backend.pet.dto.response.PetResponse.*;
-import com.dodo.backend.pet.entity.Pet;
 import org.springframework.data.domain.Pageable;
 
 import java.util.UUID;
@@ -26,8 +24,6 @@ public interface PetService {
 
     /**
      * 반려동물의 정보를 선택적으로 수정합니다.
-     * <p>
-     * MyBatis의 동적 쿼리를 호출하여 값이 존재하는 필드만 업데이트합니다.
      *
      * @param petId  수정할 반려동물의 고유 ID
      * @param request 수정할 정보를 담은 요청 객체
@@ -37,9 +33,6 @@ public interface PetService {
 
     /**
      * 반려동물 가족 초대를 위한 코드를 발급합니다.
-     * <p>
-     * 반려동물의 존재 여부를 검증한 후, 실제 코드 생성 및 저장 로직은
-     * {@link com.dodo.backend.userpet.service.UserPetService}에 위임합니다.
      *
      * @param userId 요청한 사용자 ID
      * @param petId  반려동물 ID
@@ -48,35 +41,31 @@ public interface PetService {
     PetInvitationResponse issueInvitationCode(UUID userId, Long petId);
 
     /**
-     * 사용자가 입력한 초대 코드를 통해 반려동물 가족 그룹에 참여합니다.
-     * <p>
-     * 실제 등록 로직은 {@link com.dodo.backend.userpet.service.UserPetService}에서 수행하며,
-     * 결과 데이터를 응답 DTO로 변환하여 반환합니다.
+     * 사용자가 입력한 초대 코드를 통해 반려동물 가족 그룹 참여를 신청합니다.
      *
      * @param userId  요청한 사용자의 ID
-     * @param request 초대 코드가 포함된 요청 DTO (PetFamilyJoinRequest)
-     * @return 펫 정보와 가족 구성원 목록이 담긴 응답 DTO
+     * @param request 초대 코드가 포함된 요청 DTO
+     * @return 신청된 펫 ID와 처리 결과 메시지
      */
-    PetFamilyJoinResponse joinFamily(UUID userId, PetFamilyJoinRequest request);
-
-    /**
-     * 반려동물 ID를 기반으로 Pet 엔티티를 조회합니다.
-     * <p>
-     * 다른 도메인 서비스(UserPet 등)에서 Pet 엔티티가 필요할 때
-     * 리포지토리를 직접 호출하지 않고 이 메소드를 사용합니다.
-     *
-     * @param petId 조회할 반려동물의 ID
-     * @return 조회된 Pet 엔티티
-     * @throws com.dodo.backend.pet.exception.PetException 해당 ID의 반려동물이 존재하지 않을 경우
-     */
-    Pet getPet(Long petId);
+    PetFamilyJoinRequestResponse applyForFamily(UUID userId, PetFamilyJoinRequest request);
 
     /**
      * 사용자의 반려동물 목록을 페이징하여 조회합니다.
      *
      * @param userId   조회할 사용자의 ID
-     * @param pageable 페이징 요청 정보 (page, size)
+     * @param pageable 페이징 요청 정보
      * @return 페이징 처리된 반려동물 목록 응답 DTO
      */
     PetListResponse getPetList(UUID userId, Pageable pageable);
+
+    /**
+     * 대기 중인 가족 등록 요청을 승인하거나 거절합니다.
+     *
+     * @param requesterId  요청을 수행하는 관리자(기존 가족) ID
+     * @param petId        반려동물 ID
+     * @param targetUserId 승인/거절 대상 유저 ID
+     * @param action       처리할 상태 문자열 ("APPROVED" 또는 "REJECTED")
+     * @return 펫 ID와 처리 결과 메시지
+     */
+    PetFamilyApprovalResponse manageFamily(UUID requesterId, Long petId, UUID targetUserId, String action);
 }

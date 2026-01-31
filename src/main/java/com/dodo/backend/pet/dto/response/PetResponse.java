@@ -8,10 +8,12 @@ import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 펫 도메인과 관련된 응답 데이터를 캡슐화하는 DTO 그룹 클래스입니다.
+ * <p>
+ * 펫 등록, 수정, 조회, 가족 초대 및 승인 등 다양한 API 응답에 사용되는
+ * Inner Static Class들을 포함하고 있습니다.
  */
 @Schema(description = "펫 관련 응답 DTO 그룹")
 public class PetResponse {
@@ -32,10 +34,11 @@ public class PetResponse {
         private String message;
 
         /**
-         * 펫 ID를 사용하여 응답 DTO 객체를 생성하는 정적 팩토리 메서드입니다.
+         * 펫 ID와 메시지를 사용하여 응답 DTO 객체를 생성하는 정적 팩토리 메서드입니다.
          *
-         * @param petId 생성된 펫의 고유 식별자
-         * @return 초기화된 PetRegisterResponse 객체
+         * @param petId   생성된 펫의 고유 식별자
+         * @param message 클라이언트에게 전달할 성공 메시지
+         * @return 초기화된 {@link PetRegisterResponse} 객체
          */
         public static PetRegisterResponse toDto(Long petId, String message) {
             return PetRegisterResponse.builder()
@@ -54,7 +57,7 @@ public class PetResponse {
     @Schema(description = "반려동물 정보 수정 결과 응답")
     public static class PetUpdateResponse {
 
-        @Schema(description = "응답 메시지", example = "새 반려동물을 등록완료했습니다.")
+        @Schema(description = "응답 메시지", example = "반려동물 정보 수정을 완료했습니다.")
         private String message;
 
         @Schema(description = "반려동물 고유 ID", example = "1")
@@ -99,7 +102,7 @@ public class PetResponse {
          * @param breed              변경된 품종
          * @param referenceHeartRate 변경된 심박수 기준
          * @param deviceId           변경된 디바이스 ID
-         * @return 수정 완료 정보가 담긴 PetDetailResponse DTO
+         * @return 수정 완료 정보가 담긴 {@link PetUpdateResponse} DTO
          */
         public static PetUpdateResponse toDto(Long petId, String message, String registrationNumber,
                                               String sex, Integer age, String petName,
@@ -135,56 +138,31 @@ public class PetResponse {
     }
 
     /**
-     * 가족 초대 코드를 통해 그룹에 성공적으로 참여했을 때 반환되는 응답 DTO입니다.
-     * <p>
-     * 참여한 반려동물의 정보와 현재 가족 구성원 목록을 포함합니다.
+     * 가족 초대 코드를 통해 등록 신청을 완료했을 때 반환되는 응답 DTO입니다.
      */
     @Getter
     @Builder
     @AllArgsConstructor
-    @Schema(description = "가족 초대 수락 및 멤버 조회 응답")
-    public static class PetFamilyJoinResponse {
+    @Schema(description = "가족 초대 신청 결과 응답")
+    public static class PetFamilyJoinRequestResponse {
 
-        @Schema(description = "반려동물 ID", example = "101")
+        @Schema(description = "신청한 반려동물 ID", example = "101")
         private Long petId;
 
-        @Schema(description = "반려동물 이름", example = "보리")
-        private String petName;
-
-        @Schema(description = "가족 구성원 목록")
-        private List<FamilyMemberList> familyMembers;
+        @Schema(description = "처리 결과 메시지", example = "가족 등록을 신청했습니다. 승인을 기다려주세요.")
+        private String message;
 
         /**
-         * 가족 구성원의 간략한 프로필 정보를 담는 내부 DTO 클래스입니다.
-         */
-        @Getter
-        @Builder
-        @AllArgsConstructor
-        @Schema(description = "가족 구성원 정보")
-        public static class FamilyMemberList {
-            @Schema(description = "사용자 ID", example = "a1b2c3d4-...")
-            private UUID userId;
-
-            @Schema(description = "프로필 이미지 URL", example = "https://i.pravatar.cc/150?img=3")
-            private String profileUrl;
-
-            @Schema(description = "닉네임", example = "이순재")
-            private String nickname;
-        }
-
-        /**
-         * 펫 정보와 가족 목록을 받아 응답 DTO를 생성하는 정적 팩토리 메서드입니다.
+         * 펫 ID와 메시지를 받아 응답 DTO를 생성합니다.
          *
-         * @param petId         반려동물 ID
-         * @param petName       반려동물 이름
-         * @param familyMembers 변환된 가족 구성원 목록 DTO
-         * @return 초기화된 PetFamilyJoinResponse 객체
+         * @param petId   신청된 반려동물 ID
+         * @param message 처리 결과 메시지
+         * @return 초기화된 {@link PetFamilyJoinRequestResponse} 객체
          */
-        public static PetFamilyJoinResponse toDto(Long petId, String petName, List<FamilyMemberList> familyMembers) {
-            return PetFamilyJoinResponse.builder()
+        public static PetFamilyJoinRequestResponse toDto(Long petId, String message) {
+            return PetFamilyJoinRequestResponse.builder()
                     .petId(petId)
-                    .petName(petName)
-                    .familyMembers(familyMembers)
+                    .message(message)
                     .build();
         }
     }
@@ -268,6 +246,36 @@ public class PetResponse {
 
             @Schema(description = "등록번호", example = "4102020001231")
             private String registrationNumber;
+        }
+    }
+
+    /**
+     * 가족 승인/거절 처리가 완료되었을 때 반환되는 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "가족 승인/거절 처리 결과 응답")
+    public static class PetFamilyApprovalResponse {
+
+        @Schema(description = "대상 반려동물 ID", example = "101")
+        private Long petId;
+
+        @Schema(description = "처리 결과 메시지", example = "가족 신청을 승인했습니다.")
+        private String message;
+
+        /**
+         * 펫 ID와 처리 메시지를 받아 응답 DTO를 생성합니다.
+         *
+         * @param petId   처리된 반려동물 ID
+         * @param message 처리 결과 메시지 (승인/거절 여부 포함)
+         * @return 초기화된 {@link PetFamilyApprovalResponse} 객체
+         */
+        public static PetFamilyApprovalResponse toDto(Long petId, String message) {
+            return PetFamilyApprovalResponse.builder()
+                    .petId(petId)
+                    .message(message)
+                    .build();
         }
     }
 }

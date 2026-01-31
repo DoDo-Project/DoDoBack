@@ -1,10 +1,7 @@
 package com.dodo.backend.userpet.service;
 
 import com.dodo.backend.pet.entity.Pet;
-import com.dodo.backend.user.entity.User;
 import com.dodo.backend.userpet.entity.RegistrationStatus;
-import com.dodo.backend.userpet.entity.UserPet;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.Map;
@@ -38,19 +35,13 @@ public interface UserPetService {
     Map<String, Object> generateInvitationCode(UUID userId, Long petId);
 
     /**
-     * 사용자가 입력한 초대 코드를 검증하고, 유효한 경우 해당 반려동물의 가족 구성원으로 등록합니다.
-     * <p>
-     * 1. Redis에서 초대 코드를 조회하여 유효성을 검증하고 반려동물 ID를 획득합니다.<br>
-     * 2. 요청한 사용자가 이미 해당 반려동물의 가족인지 중복 여부를 확인합니다.<br>
-     * 3. 검증이 완료되면 {@link #registerUserPet}을 호출하여 가족 관계를 생성(APPROVED)합니다.<br>
-     * 4. 갱신된 가족 구성원 목록과 펫 정보를 반환하여 응답 데이터를 구성할 수 있도록 합니다.
+     * 초대 코드를 검증하고, 해당 사용자를 가족 구성원(PENDING)으로 등록합니다.
      *
      * @param userId 초대 코드를 입력한 사용자의 고유 식별자(UUID)
-     * @param code   사용자가 입력한 6자리 대문자/숫자 조합의 초대 코드
-     * @return 펫 엔티티("pet")와 최신 가족 구성원 목록("members")을 포함하는 Map 객체
-     * @throws com.dodo.backend.userpet.exception.UserPetException 코드가 유효하지 않거나, 이미 가족인 경우 발생
+     * @param code   사용자가 입력한 6자리 초대 코드
+     * @return 등록 신청된 반려동물의 ID (Long)
      */
-    Map<String, Object> joinFamilyByCode(UUID userId, String code);
+    Long registerByInvitation(UUID userId, String code);
 
     /**
      * 사용자가 속한 반려동물 목록을 페이징하여 조회합니다.
@@ -63,4 +54,15 @@ public interface UserPetService {
      * @return 페이징 결과가 담긴 Map
      */
     Map<String, Object> getUserPets(UUID userId, Pageable pageable);
+
+    /**
+     * 대기 중인(PENDING) 가족 등록 요청을 승인하거나 거절합니다.
+     *
+     * @param requesterId 요청을 수행하는 관리자(기존 가족) ID
+     * @param petId       반려동물 ID
+     * @param targetUserId 승인/거절 대상 유저 ID
+     * @param action      처리할 상태 문자열 ("APPROVED" 또는 "REJECTED")
+     * @return 처리 결과 메시지
+     */
+    String approveOrRejectFamilyMember(UUID requesterId, Long petId, UUID targetUserId, String action);
 }

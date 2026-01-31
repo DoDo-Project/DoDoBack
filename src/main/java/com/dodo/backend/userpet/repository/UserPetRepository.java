@@ -1,5 +1,6 @@
 package com.dodo.backend.userpet.repository;
 
+import com.dodo.backend.userpet.entity.RegistrationStatus;
 import com.dodo.backend.userpet.entity.UserPet;
 import com.dodo.backend.userpet.entity.UserPet.UserPetId;
 import org.springframework.data.domain.Page;
@@ -21,23 +22,21 @@ import java.util.UUID;
 @Repository
 public interface UserPetRepository extends JpaRepository<UserPet, UserPetId> {
 
-    /**
-     * 특정 펫의 모든 가족 구성원(UserPet)을 조회합니다.
-     * <p>
-     * N+1 문제를 방지하기 위해 User 엔티티를 Fetch Join으로 함께 가져옵니다.
-     */
-    @Query("SELECT up FROM UserPet up JOIN FETCH up.user WHERE up.pet.petId = :petId")
-    List<UserPet> findAllByPetId(@Param("petId") Long petId);
 
     /**
-     * 특정 사용자가 속한 반려동물 목록을 페이징하여 조회합니다.
+     * 특정 사용자가 속한 반려동물 목록 중, 지정된 상태(예: APPROVED)인 데이터만 페이징하여 조회합니다.
      * <p>
      * {@code @EntityGraph}를 사용하여 연관된 Pet 엔티티를 함께 로딩(Fetch Join 효과)합니다.
      *
      * @param userId   사용자 ID
+     * @param status   가족 등록 상태 (APPROVED 등)
      * @param pageable 페이징 정보
-     * @return 페이징된 UserPet 목록
+     * @return 상태 조건에 맞는 페이징된 UserPet 목록
      */
     @EntityGraph(attributePaths = "pet")
-    Page<UserPet> findAllByUser_UsersId(UUID userId, Pageable pageable);
+    Page<UserPet> findAllByUser_UsersIdAndRegistrationStatus(
+            UUID userId,
+            RegistrationStatus status,
+            Pageable pageable
+    );
 }

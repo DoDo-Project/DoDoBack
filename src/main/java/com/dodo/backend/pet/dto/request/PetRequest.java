@@ -3,6 +3,7 @@ package com.dodo.backend.pet.dto.request;
 import com.dodo.backend.pet.entity.Pet;
 import com.dodo.backend.pet.entity.PetSex;
 import com.dodo.backend.pet.entity.PetSpecies;
+import com.dodo.backend.userpet.entity.RegistrationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -14,6 +15,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * 펫 도메인과 관련된 요청 데이터를 캡슐화하는 DTO 그룹 클래스입니다.
@@ -138,6 +140,29 @@ public class PetRequest {
         @NotBlank(message = "초대 코드는 필수입니다.")
         @Size(min = 6, max = 6, message = "초대 코드는 6자리여야 합니다.")
         private String code;
+    }
+
+    /**
+     * 가족 등록 요청 승인/거절을 위한 DTO입니다.
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @Schema(description = "가족 요청 승인/거절 요청")
+    public static class PetFamilyApprovalRequest {
+
+        @NotNull
+        @Schema(description = "반려동물 ID", example = "1")
+        private Long petId;
+
+        @NotNull
+        @Schema(description = "승인/거절 대상 유저 ID", example = "550e8400-e29b-41d4-a716-446655440000")
+        private UUID targetUserId;
+
+        @NotBlank
+        @Schema(description = "처리할 상태 (APPROVED: 승인, REJECTED: 거절)", example = "APPROVED")
+        private String action;
     }
 
 }

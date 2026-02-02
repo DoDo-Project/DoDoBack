@@ -51,7 +51,6 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * <b>상세 처리 프로세스:</b>
      * <ol>
      * <li>요청된 Provider(NAVER, GOOGLE)를 지원하는 {@link SocialApiClient} 구현체를 동적으로 선택합니다. (지원 불가 시 {@code INVALID_REQUEST} 예외)</li>
      * <li>선택된 클라이언트를 통해 인가 코드로 AccessToken을 발급받고, 유저 프로필 정보를 조회합니다.</li>
@@ -144,7 +143,6 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * <b>상세 처리 프로세스:</b>
      * <ol>
      * <li>{@link RateLimitService}를 통해 해당 클라이언트 IP의 차단(Ban) 여부를 우선 확인합니다.</li>
      * <li>이미 차단된 IP일 경우 즉시 {@code TOO_MANY_REQUESTS} 예외를 발생시켜 접근을 거부합니다.</li>
@@ -173,7 +171,6 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * <b>상세 처리 프로세스:</b>
      * <ol>
      * <li>요청받은 Refresh Token을 사용하여 Redis에 저장된 토큰 정보를 조회합니다. (없을 시 {@code TOKEN_NOT_FOUND} 예외)</li>
      * <li>조회된 Refresh Token 데이터를 Redis에서 삭제하여 더 이상 재발급에 사용할 수 없도록 만듭니다.</li>
@@ -204,7 +201,6 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * <b>상세 처리 프로세스:</b>
      * <ol>
      * <li>전달받은 Refresh Token의 유효성(서명, 만료 여부)을 JWT 자체 검증 로직으로 확인합니다. (실패 시 {@code EXPIRED_REFRESH_TOKEN} 예외)</li>
      * <li>Redis를 조회하여 해당 토큰이 실제로 저장되어 있고 유효한지 확인합니다. (없을 시 {@code TOKEN_NOT_FOUND} 예외)</li>
@@ -247,13 +243,12 @@ public class AuthServiceImpl implements AuthService {
 
         long expiresInSeconds = jwtTokenProvider.getAccessTokenValidityInMilliseconds() / 1000;
 
-        return TokenResponse.toDto(newAccessToken, newRefreshToken, expiresInSeconds);
+        return TokenResponse.toDto(newAccessToken, newRefreshToken, expiresInSeconds, "성공적으로 토큰이 재발급되었습니다.");
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * <b>상세 처리 프로세스:</b>
      * <ol>
      * <li>{@link PetService#findPetIdByDeviceId}를 호출하여 디바이스 ID와 매핑된 펫 ID를 조회합니다.</li>
      * <li>조회 결과가 없을 경우 {@code DEVICE_NOT_FOUND} 예외를 발생시켜 로그인을 실패 처리합니다.</li>
@@ -297,5 +292,58 @@ public class AuthServiceImpl implements AuthService {
                 expiresInSeconds,
                 petId
         );
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * <ol>
+     * <li>헤더에서 추출한 Refresh Token의 서명 및 만료 여부를 검증합니다.</li>
+     * <li>Redis에서 해당 토큰이 존재하는지 확인합니다. (없을 경우 예외 발생)</li>
+     * <li>저장된 토큰의 권한이 <b>ROLE_DEVICE</b>인지 확인하여 장치 토큰임을 보장합니다.</li>
+     * <li><b>RTR 적용:</b> 기존 토큰을 삭제하고 새로운 장치용 토큰 쌍을 생성하여 저장합니다.</li>
+     * </ol>
+     */
+    @Transactional
+    @Override
+    public TokenResponse deviceReissueToken(ReissueRequest request) {
+
+        String requestRefreshToken = request.getRefreshToken();
+
+        if (!jwtTokenProvider.validateToken(requestRefreshToken)) {
+            log.warn("장치 재발급 실패: 유효하지 않거나 만료된 Refresh Token입니다.");
+            throw new AuthException(EXPIRED_REFRESH_TOKEN);
+        }
+
+        RefreshToken storedToken = refreshTokenRepository.findByRefreshToken(requestRefreshToken)
+                .orElseThrow(() -> {
+                    log.warn("장치 재발급 실패: Redis에서 토큰을 찾을 수 없습니다.");
+                    return new AuthException(TOKEN_NOT_FOUND);
+                });
+
+        if (!"ROLE_DEVICE".equals(storedToken.getRole())) {
+            log.warn("장치 재발급 실패: 장치 권한이 아닌 토큰입니다. Role: {}", storedToken.getRole());
+            throw new AuthException(INVALID_REQUEST);
+        }
+
+        refreshTokenRepository.delete(storedToken);
+
+        UUID deviceUuid = UUID.fromString(storedToken.getUsersId());
+        String role = storedToken.getRole();
+
+        String newAccessToken = jwtTokenProvider.createAccessToken(deviceUuid, role);
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(deviceUuid);
+
+        refreshTokenRepository.save(RefreshToken.builder()
+                .usersId(deviceUuid.toString())
+                .refreshToken(newRefreshToken)
+                .role(role)
+                .build());
+
+        log.info("장치 토큰 재발급 성공 - Device UUID: {}", deviceUuid);
+
+        long expiresInSeconds = jwtTokenProvider.getAccessTokenValidityInMilliseconds() / 1000;
+
+        return TokenResponse.toDto(newAccessToken, newRefreshToken, expiresInSeconds, "성공적으로 토큰이 재발급되었습니다.");
     }
 }

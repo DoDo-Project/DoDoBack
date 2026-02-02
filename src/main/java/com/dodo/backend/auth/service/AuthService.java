@@ -69,4 +69,16 @@ public interface AuthService {
      * @return 토큰 및 연결된 펫 정보
      */
     DeviceAuthResponse deviceLogin(DeviceAuthRequest request);
+
+    /**
+     * 장치(Device) 전용 토큰 재발급을 수행합니다.
+     * <p>
+     * Authorization Header로 전달된 Refresh Token을 검증하고,
+     * RTR(Refresh Token Rotation) 정책에 따라 새로운 Access/Refresh Token을 발급합니다.
+     *
+     * @param request 유효한 리프레시 토큰이 담긴 요청 객체
+     * @return 새로 발급된 토큰 쌍(Access/Refresh)과 만료 시간을 담은 응답 DTO
+     * @throws com.dodo.backend.auth.exception.AuthException 토큰이 유효하지 않거나 만료된 경우, 또는 Redis에 존재하지 않는 경우
+     */
+    TokenResponse deviceReissueToken(ReissueRequest request);
 }

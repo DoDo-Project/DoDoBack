@@ -222,4 +222,40 @@ public class AuthController {
         authService.checkRateLimit(clientIp);
         return ResponseEntity.ok(authService.deviceLogin(request));
     }
+
+    /**
+     * 장치(Device)의 만료된 Access Token을 갱신합니다.
+     * <p>
+     * Request Body로 전달받은 Refresh Token을 사용하여 인증하고,
+     * 기존 토큰을 폐기(RTR)한 후 새로운 토큰 쌍을 반환합니다.
+     *
+     * @param request 장치용 Refresh Token이 담긴 요청 DTO
+     * @return 새로 발급된 Access/Refresh Token
+     */
+    @Operation(summary = "장치 토큰 재발급", description = "Body에 담긴 Refresh Token을 사용하여 장치용 새 토큰을 발급받습니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "성공적으로 토큰이 재발급되었습니다.",
+                    content = @Content(schema = @Schema(implementation = TokenResponse.class))),
+            @ApiResponse(responseCode = "400", description = "refresh토큰이 만료되었거나 유효하지 않은 토큰입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"refresh토큰이 만료되었습니다.\"}"))), // 메시지 수정 반영
+            @ApiResponse(responseCode = "404", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "409", description = "토큰이 존재하지 않습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "409 Conflict", value = "{\"status\": 409, \"message\": \"토큰이 존재하지 않습니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @PostMapping("/reissue/devices")
+    public ResponseEntity<TokenResponse> deviceReissue(@RequestBody @Valid ReissueRequest request) {
+        log.info("장치 토큰 재발급 요청 수신");
+        return ResponseEntity.ok(authService.deviceReissueToken(request));
+    }
 }

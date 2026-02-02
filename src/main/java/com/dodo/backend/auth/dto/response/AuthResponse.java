@@ -19,7 +19,7 @@ public class AuthResponse {
     @Getter
     @Builder
     @AllArgsConstructor
-    @Schema(description = "소셜 로그인 성공 응답 (기존 회원)")
+    @Schema(description = "소셜 로그인 성공 응답")
     public static class SocialLoginResponse {
 
         @Schema(description = "응답 메시지", example = "로그인이 완료되었습니다.")
@@ -54,7 +54,7 @@ public class AuthResponse {
     @Getter
     @Builder
     @AllArgsConstructor
-    @Schema(description = "신규 가입 대상자 응답 (추가 정보 입력 필요)")
+    @Schema(description = "신규 가입 대상자 응답")
     public static class SocialRegisterResponse {
 
         @Schema(description = "응답 메시지", example = "추가 정보가 필요합니다.")
@@ -89,8 +89,11 @@ public class AuthResponse {
     @Getter
     @Builder
     @AllArgsConstructor
-    @Schema(description = "토큰 재발급 응답 (RTR 적용)")
+    @Schema(description = "토큰 재발급 응답")
     public static class TokenResponse {
+
+        @Schema(description = "응답 메시지", example = "성공적으로 토큰이 재발급되었습니다.")
+        private String message;
 
         @Schema(description = "새로 발급된 서버 접근용 액세스 토큰", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
         private String accessToken;
@@ -109,8 +112,9 @@ public class AuthResponse {
          * @param accessTokenExpiresIn 액세스 토큰의 유효 기간 (밀리초 단위 -> 초 단위 변환 필요 시 로직 확인)
          * @return 빌드된 TokenResponse 객체
          */
-        public static TokenResponse toDto(String accessToken, String refreshToken, Long accessTokenExpiresIn) {
+        public static TokenResponse toDto(String accessToken, String refreshToken, Long accessTokenExpiresIn, String message) {
             return TokenResponse.builder()
+                    .message(message)
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
                     .accessTokenExpiresIn(accessTokenExpiresIn)

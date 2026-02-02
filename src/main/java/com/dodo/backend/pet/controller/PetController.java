@@ -1,10 +1,8 @@
 package com.dodo.backend.pet.controller;
 
 import com.dodo.backend.common.exception.ErrorResponse;
-import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyApprovalRequest;
-import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
-import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
-import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
+import com.dodo.backend.pet.dto.request.PetRequest;
+import com.dodo.backend.pet.dto.request.PetRequest.*;
 import com.dodo.backend.pet.dto.response.PetResponse.*;
 import com.dodo.backend.pet.service.PetService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -444,5 +442,58 @@ public class PetController {
         petService.deletePet(userId, petId);
 
         return ResponseEntity.ok(PetDeleteResponse.toDto("반려동물 목록에서 삭제되었습니다."));
+    }
+
+    /**
+     * 반려동물의 디바이스를 재등록(변경)합니다.
+     * <p>
+     * 기존에 등록된 IoT 디바이스 ID를 새로운 ID로 교체합니다.
+     * 해당 반려동물의 등록자(소유자)만 변경할 수 있으며,
+     * 이미 다른 반려동물에 사용 중인 디바이스 ID로는 변경할 수 없습니다.
+     *
+     * @param petId       디바이스를 변경할 펫 ID
+     * @param request     새로운 디바이스 ID 정보
+     * @param userDetails 인증된 사용자 정보
+     * @return 변경된 디바이스 정보 (HTTP 200)
+     */
+    @Operation(summary = "펫 디바이스 재등록", description = "반려동물의 IoT 디바이스 ID를 변경합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "디바이스가 성공적으로 재등록되었습니다.",
+                    content = @Content(schema = @Schema(implementation = PetDeviceUpdateResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "403", description = "해당 반려동물에 대한 권한이 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "403 Forbidden", value = "{\"status\": 403, \"message\": \"해당 반려동물에 대한 권한이 없습니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "해당 반려동물을 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"해당 반려동물을 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "409", description = "이미 다른 반려동물에 등록된 디바이스 ID입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "409 Conflict", value = "{\"status\": 409, \"message\": \"이미 다른 반려동물에 등록된 디바이스 ID입니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @PutMapping("/{petId}/device")
+    public ResponseEntity<PetDeviceUpdateResponse> updateDevice(
+            @PathVariable Long petId,
+            @Valid @RequestBody PetDeviceUpdateRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        UUID userId = UUID.fromString(userDetails.getUsername());
+        PetDeviceUpdateResponse response = petService.updateDevice(userId, petId, request);
+
+        return ResponseEntity.ok(response);
     }
 }

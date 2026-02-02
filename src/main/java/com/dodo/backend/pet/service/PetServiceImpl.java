@@ -1,6 +1,7 @@
 package com.dodo.backend.pet.service;
 
 import com.dodo.backend.imagefile.service.ImageFileService;
+import com.dodo.backend.pet.dto.request.PetRequest.PetDeviceUpdateRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
 import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
@@ -256,7 +257,7 @@ public class PetServiceImpl implements PetService {
      * <li>처리 결과 메시지를 반환받아 DTO에 담아 응답합니다.</li>
      * </ol>
      *
-     * @param requesterId  요청을 수행하는 관리자(기존 가족) ID
+     * @param userId  요청을 수행하는 관리자(기존 가족) ID
      * @param petId        반려동물 ID
      * @param targetUserId 승인/거절 대상 유저 ID
      * @param action       처리할 상태 문자열 ("APPROVED" 또는 "REJECTED")
@@ -264,9 +265,9 @@ public class PetServiceImpl implements PetService {
      */
     @Transactional
     @Override
-    public PetFamilyApprovalResponse manageFamily(UUID requesterId, Long petId, UUID targetUserId, String action) {
+    public PetFamilyApprovalResponse manageFamily(UUID userId, Long petId, UUID targetUserId, String action) {
 
-        String resultMessage = userPetService.approveOrRejectFamilyMember(requesterId, petId, targetUserId, action);
+        String resultMessage = userPetService.approveOrRejectFamilyMember(userId, petId, targetUserId, action);
 
         return PetFamilyApprovalResponse.toDto(petId, resultMessage);
     }
@@ -281,15 +282,15 @@ public class PetServiceImpl implements PetService {
      * <li>최종적으로 페이징 정보가 포함된 {@link PendingUserListResponse} 객체를 반환합니다.</li>
      * </ol>
      *
-     * @param managerId 요청을 수행하는 관리자(기존 가족)의 UUID
+     * @param userId 요청을 수행하는 관리자(기존 가족)의 UUID
      * @param pageable  페이징 요청 정보
      * @return 페이징된 승인 대기자 목록 응답 DTO
      */
     @Transactional(readOnly = true)
     @Override
-    public PendingUserListResponse getAllPendingUsers(UUID managerId, Pageable pageable) {
+    public PendingUserListResponse getAllPendingUsers(UUID userId, Pageable pageable) {
 
-        Map<String, Object> result = userPetService.getAllPendingUsers(managerId, pageable);
+        Map<String, Object> result = userPetService.getAllPendingUsers(userId, pageable);
         Page<UserPet> entityPage = (Page<UserPet>) result.get("pendingUserPage");
 
         List<Long> petIds = entityPage.getContent().stream()
@@ -387,5 +388,46 @@ public class PetServiceImpl implements PetService {
         } else {
             log.info("가족 그룹에서 탈퇴했습니다. (다른 가족이 남아있어 펫 정보 유지) User: {}, PetId: {}", userId, petId);
         }
+    }
+
+    /**
+     * 반려동물의 디바이스를 재등록(수정)합니다.
+     * <p>
+     * 1. 권한 검증 (소유자 확인)
+     * 2. 디바이스 ID 중복 확인 (이미 다른 펫이 사용 중인지)
+     * 3. MyBatis를 통한 업데이트 수행
+     * 4. DTO 반환 (엔티티 직접 참조 X)
+     */
+    @Transactional
+    @Override
+    public PetDeviceUpdateResponse updateDevice(UUID userId, Long petId, PetDeviceUpdateRequest request) {
+
+        Pet pet = petRepository.findById(petId)
+                .orElseThrow(() -> new PetException(PET_NOT_FOUND));
+
+        if (!userPetService.isUserPetOwner(userId, petId)) {
+            throw new PetException(ACTION_PERMISSION_DENIED);
+        }
+
+        String newDeviceId = request.getDeviceId();
+        String oldDeviceId = pet.getDeviceId();
+
+        if (!Objects.equals(oldDeviceId, newDeviceId)) {
+            if (petRepository.existsByDeviceId(newDeviceId)) {
+                throw new PetException(DEVICE_ID_DUPLICATED);
+            }
+        }
+
+        petMapper.updatePetDevice(petId, newDeviceId);
+
+        log.info("펫 디바이스 변경 완료 - PetId: {}, Old: {}, New: {}", petId, oldDeviceId, newDeviceId);
+
+        return PetDeviceUpdateResponse.toDto(
+                pet.getPetId(),
+                pet.getPetName(),
+                oldDeviceId,
+                newDeviceId,
+                "디바이스가 성공적으로 재등록되었습니다."
+        );
     }
 }

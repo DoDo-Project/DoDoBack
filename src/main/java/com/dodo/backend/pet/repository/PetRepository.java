@@ -20,4 +20,11 @@ public interface PetRepository extends JpaRepository<Pet, Long> {
      * @return 등록번호가 존재하면 true, 그렇지 않으면 false
      */
     boolean existsByRegistrationNumber(String registrationNumber);
+
+    /**
+     * 디바이스 ID 중복 여부 확인
+     * @param deviceId 확인할 디바이스 ID
+     * @return 존재하면 true, 없으면 false
+     */
+    boolean existsByDeviceId(String deviceId);
 }

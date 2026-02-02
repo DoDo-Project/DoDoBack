@@ -2,12 +2,12 @@ package com.dodo.backend.auth.service;
 
 import com.dodo.backend.auth.dto.request.AuthRequest.DeviceAuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest;
 import com.dodo.backend.auth.entity.RefreshToken;
 import com.dodo.backend.auth.exception.AuthErrorCode;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.auth.repository.RefreshTokenRepository;
 import com.dodo.backend.common.jwt.JwtTokenProvider;
-import com.dodo.backend.pet.service.PetService;
 import com.dodo.backend.pet.service.PetServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
@@ -203,8 +203,8 @@ class AuthServiceTest {
         String userId = UUID.randomUUID().toString();
         String role = "USER";
 
-        com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest request =
-                new com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest(oldRefreshTokenStr);
+        ReissueRequest request =
+                new ReissueRequest(oldRefreshTokenStr);
 
         RefreshToken oldTokenEntity = RefreshToken.builder()
                 .usersId(userId)
@@ -250,8 +250,8 @@ class AuthServiceTest {
         log.info("유효하지 않은 토큰으로 인한 재발급 실패 테스트를 시작합니다.");
         // given
         String invalidToken = "invalid-token";
-        com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest request =
-                new com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest(invalidToken);
+        ReissueRequest request =
+                new ReissueRequest(invalidToken);
 
         log.info("토큰 검증 결과가 실패라고 설정합니다.");
         given(jwtTokenProvider.validateToken(invalidToken))
@@ -280,8 +280,8 @@ class AuthServiceTest {
         log.info("Redis 미발견으로 인한 재발급 실패 테스트를 시작합니다.");
         // given
         String notFoundToken = "valid-format-token";
-        com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest request =
-                new com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest(notFoundToken);
+        ReissueRequest request =
+                new ReissueRequest(notFoundToken);
 
         log.info("토큰 형식은 맞지만 DB 조회 결과가 없다고 설정합니다.");
         given(jwtTokenProvider.validateToken(notFoundToken))
@@ -377,5 +377,123 @@ class AuthServiceTest {
         verify(petService).findPetIdByDeviceId(unknownDeviceId);
         verify(refreshTokenRepository, never()).save(any());
         log.info("등록되지 않은 디바이스 실패 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 장치 토큰 재발급 성공 시나리오를 테스트합니다.
+     * <p>
+     * 1. 토큰이 유효하고 Redis에 존재해야 합니다.
+     * 2. 토큰의 권한이 ROLE_DEVICE여야 합니다.
+     * 3. RTR이 적용되어 기존 토큰은 삭제되고 신규 토큰이 저장되어야 합니다.
+     */
+    @Test
+    @DisplayName("장치 토큰 재발급 성공 - Role 검증 및 RTR 적용")
+    void deviceReissueToken_Success() {
+        log.info("장치 토큰 재발급 성공 테스트를 시작합니다.");
+        // given
+        String oldRefreshTokenStr = "device-old-refresh-token";
+        String newAccessTokenStr = "device-new-access-token";
+        String newRefreshTokenStr = "device-new-refresh-token";
+        String deviceUuid = UUID.randomUUID().toString();
+        String role = "ROLE_DEVICE";
+
+        ReissueRequest request = new ReissueRequest(oldRefreshTokenStr);
+
+        RefreshToken oldTokenEntity = RefreshToken.builder()
+                .usersId(deviceUuid)
+                .refreshToken(oldRefreshTokenStr)
+                .role(role)
+                .build();
+
+        log.info("리프레시 토큰이 유효하고 권한이 장치 권한이라고 설정합니다.");
+        given(jwtTokenProvider.validateToken(oldRefreshTokenStr))
+                .willReturn(true);
+        given(refreshTokenRepository.findByRefreshToken(oldRefreshTokenStr))
+                .willReturn(Optional.of(oldTokenEntity));
+
+        given(jwtTokenProvider.createAccessToken(UUID.fromString(deviceUuid), role))
+                .willReturn(newAccessTokenStr);
+        given(jwtTokenProvider.createRefreshToken(UUID.fromString(deviceUuid)))
+                .willReturn(newRefreshTokenStr);
+        given(jwtTokenProvider.getAccessTokenValidityInMilliseconds())
+                .willReturn(3600000L);
+
+        // when
+        log.info("장치 재발급 서비스를 호출합니다.");
+        TokenResponse response = authService.deviceReissueToken(request);
+
+        // then
+        log.info("기존 토큰 삭제, 신규 토큰 저장, 그리고 ROLE_DEVICE 권한 유지가 되었는지 검증합니다.");
+        verify(refreshTokenRepository).delete(oldTokenEntity);
+        verify(refreshTokenRepository).save(any(RefreshToken.class));
+
+        assertThat(response.getAccessToken()).isEqualTo(newAccessTokenStr);
+        assertThat(response.getRefreshToken()).isEqualTo(newRefreshTokenStr);
+        log.info("장치 토큰 재발급 성공 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 장치 권한이 아닌 토큰(예: 일반 유저)으로 장치 재발급을 시도하는 시나리오를 테스트합니다.
+     * <p>
+     * {@link AuthException}(INVALID_REQUEST)가 발생해야 합니다.
+     */
+    @Test
+    @DisplayName("장치 토큰 재발급 실패 - 장치 권한이 아닌 토큰")
+    void deviceReissueToken_Fail_InvalidRole() {
+        log.info("일반 유저 토큰으로 장치 재발급 시도 실패 테스트를 시작합니다.");
+        // given
+        String userRefreshToken = "user-refresh-token";
+        String userId = UUID.randomUUID().toString();
+        String role = "USER";
+
+        ReissueRequest request = new ReissueRequest(userRefreshToken);
+
+        RefreshToken userTokenEntity = RefreshToken.builder()
+                .usersId(userId)
+                .refreshToken(userRefreshToken)
+                .role(role)
+                .build();
+
+        log.info("토큰은 유효하지만 권한이 USER라고 설정합니다.");
+        given(jwtTokenProvider.validateToken(userRefreshToken))
+                .willReturn(true);
+        given(refreshTokenRepository.findByRefreshToken(userRefreshToken))
+                .willReturn(Optional.of(userTokenEntity));
+
+        // when & then
+        log.info("재발급 호출 시 잘못된 요청 예외가 발생하는지 확인합니다.");
+        assertThatThrownBy(() -> authService.deviceReissueToken(request))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.INVALID_REQUEST);
+
+        verify(refreshTokenRepository, never()).delete(any());
+        verify(refreshTokenRepository, never()).save(any());
+        log.info("권한 불일치 실패 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 유효하지 않은 토큰으로 장치 재발급을 시도하는 시나리오를 테스트합니다.
+     */
+    @Test
+    @DisplayName("장치 토큰 재발급 실패 - 유효하지 않은 Refresh Token")
+    void deviceReissueToken_Fail_InvalidToken() {
+        log.info("유효하지 않은 토큰으로 장치 재발급 실패 테스트를 시작합니다.");
+        // given
+        String invalidToken = "invalid-token";
+        ReissueRequest request =
+                new ReissueRequest(invalidToken);
+
+        given(jwtTokenProvider.validateToken(invalidToken))
+                .willReturn(false);
+
+        // when & then
+        log.info("재발급 호출 시 만료된 토큰 예외가 발생하는지 확인합니다.");
+        assertThatThrownBy(() -> authService.deviceReissueToken(request))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.EXPIRED_REFRESH_TOKEN);
+
+        log.info("유효하지 않은 토큰 실패 테스트가 통과되었습니다.");
     }
 }

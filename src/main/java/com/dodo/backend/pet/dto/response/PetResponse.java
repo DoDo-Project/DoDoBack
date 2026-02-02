@@ -468,4 +468,42 @@ public class PetResponse {
                     .build();
         }
     }
+
+    /**
+     * 펫 디바이스 재등록 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "디바이스 재등록 결과 응답")
+    public static class PetDeviceUpdateResponse {
+
+        @Schema(description = "처리 결과 메시지", example = "디바이스가 성공적으로 재등록되었습니다.")
+        private String message;
+
+        @Schema(description = "반려동물 ID", example = "101")
+        private Long petId;
+
+        @Schema(description = "반려동물 이름", example = "보리")
+        private String petName;
+
+        @Schema(description = "이전 디바이스 ID", example = "OLD_ABC123XYZ")
+        private String previousDeviceId;
+
+        @Schema(description = "새로운 디바이스 ID", example = "NEW_ABC123XYZ")
+        private String newDeviceId;
+
+        /**
+         * 엔티티를 직접 받지 않고, 필요한 필드만 전달받아 DTO를 생성합니다.
+         */
+        public static PetDeviceUpdateResponse toDto(Long petId, String petName, String oldDeviceId, String newDeviceId, String message) {
+            return PetDeviceUpdateResponse.builder()
+                    .message(message)
+                    .petId(petId)
+                    .petName(petName)
+                    .previousDeviceId(oldDeviceId)
+                    .newDeviceId(newDeviceId)
+                    .build();
+        }
+    }
 }

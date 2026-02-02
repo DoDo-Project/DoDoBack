@@ -17,4 +17,12 @@ public interface PetMapper {
      * @param petId   수정할 반려동물의 식별자
      */
     void updatePetProfileInfo(@Param("request") PetUpdateRequest request, @Param("petId") Long petId);
+
+    /**
+     * 펫의 디바이스 ID를 업데이트합니다.
+     *
+     * @param petId    업데이트할 펫 ID
+     * @param deviceId 새로운 디바이스 ID
+     */
+    void updatePetDevice(@Param("petId") Long petId, @Param("deviceId") String deviceId);
 }

@@ -1,8 +1,6 @@
 package com.dodo.backend.pet.service;
 
-import com.dodo.backend.pet.dto.request.PetRequest.PetFamilyJoinRequest;
-import com.dodo.backend.pet.dto.request.PetRequest.PetRegisterRequest;
-import com.dodo.backend.pet.dto.request.PetRequest.PetUpdateRequest;
+import com.dodo.backend.pet.dto.request.PetRequest.*;
 import com.dodo.backend.pet.dto.response.PetResponse.*;
 import org.springframework.data.domain.Pageable;
 
@@ -94,4 +92,14 @@ public interface PetService {
      * @param petId  삭제할 반려동물 ID
      */
     void deletePet(UUID userId, Long petId);
+
+    /**
+     * 반려동물의 디바이스를 재등록(수정)합니다.
+     *
+     * @param userId  요청한 사용자 ID
+     * @param petId   반려동물 ID
+     * @param request 디바이스 변경 요청 정보
+     * @return 변경된 디바이스 정보 응답
+     */
+    PetDeviceUpdateResponse updateDevice(UUID userId, Long petId, PetDeviceUpdateRequest request);
 }

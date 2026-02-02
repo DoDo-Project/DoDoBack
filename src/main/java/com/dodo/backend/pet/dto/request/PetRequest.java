@@ -165,4 +165,17 @@ public class PetRequest {
         private String action;
     }
 
+    /**
+     * 펫 디바이스 재등록 요청 DTO입니다.
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class PetDeviceUpdateRequest {
+        @NotBlank(message = "디바이스 ID는 필수입니다.")
+        @Schema(description = "새로운 디바이스 ID", example = "NEW_ABC123XYZ")
+        private String deviceId;
+    }
+
 }

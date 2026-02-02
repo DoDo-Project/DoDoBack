@@ -1,8 +1,11 @@
 package com.dodo.backend.auth.controller;
 
+import com.dodo.backend.auth.dto.request.AuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
+import com.dodo.backend.auth.dto.response.AuthResponse;
+import com.dodo.backend.auth.dto.response.AuthResponse.DeviceAuthResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse;
@@ -24,6 +27,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import static com.dodo.backend.auth.dto.request.AuthRequest.*;
 
 /**
  * 인증 및 인가와 관련된 HTTP 요청을 처리하는 컨트롤러 클래스입니다.
@@ -169,5 +174,52 @@ public class AuthController {
     public ResponseEntity<TokenResponse> reissue(@RequestBody @Valid ReissueRequest request) {
         log.info("토큰 재발급 요청 수신");
         return ResponseEntity.ok(authService.reissueToken(request));
+    }
+
+    /**
+     * 임베디드 장치(IoT) 로그인을 수행합니다.
+     * <p>
+     * 디바이스 ID를 기반으로 인증하고, 해당 디바이스와 연결된 반려동물의 ID 및 액세스 토큰을 반환합니다.
+     *
+     * @param request 디바이스 ID (deviceId)
+     * @return 액세스 토큰, 리프레시 토큰, 펫 ID (HTTP 200)
+     */
+    @Operation(summary = "장치 인증", description = "디바이스 ID를 이용해 인증하고 토큰을 발급받습니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "인증이 완료되었습니다.",
+                    content = @Content(schema = @Schema(implementation = DeviceAuthResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다. (혹은 인증 실패)",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"인증에 실패했습니다.\"}"))),
+            @ApiResponse(responseCode = "403", description = "접근 권한이 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "403 Forbidden", value = "{\"status\": 403, \"message\": \"접근 권한이 없습니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "등록된 디바이스를 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"등록된 디바이스를 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "429", description = "요청 횟수 제한을 초과했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "429 Too Many Requests", value = "{\"status\": 429, \"message\": \"요청 횟수 제한을 초과했습니다. 잠시 후 다시 시도해주세요.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @PostMapping("/devices")
+    public ResponseEntity<DeviceAuthResponse> deviceLogin(@Valid @RequestBody DeviceAuthRequest request,
+                                                          HttpServletRequest httpRequest) {
+
+        String clientIp = httpRequest.getRemoteAddr();
+        log.info("장치 로그인 요청 수신 - DeviceId: {}, IP: {}", request.getDeviceId(), clientIp);
+        authService.checkRateLimit(clientIp);
+        return ResponseEntity.ok(authService.deviceLogin(request));
     }
 }

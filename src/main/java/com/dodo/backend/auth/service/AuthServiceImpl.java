@@ -4,13 +4,16 @@ import com.dodo.backend.auth.client.SocialApiClient;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.SocialLoginRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.DeviceAuthRequest;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialLoginResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.SocialRegisterResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse;
+import com.dodo.backend.auth.dto.response.AuthResponse.DeviceAuthResponse;
 import com.dodo.backend.auth.entity.RefreshToken;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.auth.repository.RefreshTokenRepository;
 import com.dodo.backend.common.jwt.JwtTokenProvider;
+import com.dodo.backend.pet.service.PetService;
 import com.dodo.backend.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,16 +30,17 @@ import java.util.concurrent.TimeUnit;
 import static com.dodo.backend.auth.exception.AuthErrorCode.*;
 
 /**
- * {@link AuthService}의 구현체로, 전략 패턴(Strategy Pattern)을 사용하여 소셜 로그인을 처리합니다.
+ * {@link AuthService}의 구현체로, 다양한 인증 방식(소셜 로그인, 장치 인증 등)과 토큰 관리 로직을 수행합니다.
  * <p>
- * {@link SocialApiClient} 인터페이스를 구현한 빈들 중
- * 요청된 Provider에 맞는 클라이언트를 동적으로 선택하여 인증을 수행합니다.
+ * 전략 패턴을 통한 소셜 로그인 처리, JWT 기반의 토큰 발급 및 재발급(RTR),
+ * 그리고 Redis를 활용한 토큰 저장 및 블랙리스트 관리를 담당합니다.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
+    private final PetService petService;
     private final RateLimitService rateLimitService;
     private final List<SocialApiClient> socialApiClients;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -47,12 +51,15 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * 상세 처리 프로세스:
-     * 1. 요청된 Provider(NAVER, GOOGLE)를 지원하는 ApiClient 전략 선택 (지원 불가 시 예외 발생)
-     * 2. 외부 API 통신을 통해 AccessToken 발급 및 유저 프로필 조회
-     * 3. 이메일 기반으로 유저 정보 조회 (UserService 호출)
-     * 4. <b>조회된 유저의 상태 문자열(status)을 검증하여 제재된 계정일 경우 예외 발생 (ACCOUNT_RESTRICTED)</b>
-     * 5. 유저 상태에 따라 회원가입용 임시 토큰 또는 로그인용 정식 토큰 발급
+     * <b>상세 처리 프로세스:</b>
+     * <ol>
+     * <li>요청된 Provider(NAVER, GOOGLE)를 지원하는 {@link SocialApiClient} 구현체를 동적으로 선택합니다. (지원 불가 시 {@code INVALID_REQUEST} 예외)</li>
+     * <li>선택된 클라이언트를 통해 인가 코드로 AccessToken을 발급받고, 유저 프로필 정보를 조회합니다.</li>
+     * <li>이메일을 기준으로 {@link UserService}를 통해 유저 정보를 조회하거나 신규 유저 데이터를 생성합니다.</li>
+     * <li>유저의 상태(status)를 검증하여 정지/탈퇴 계정일 경우 {@code ACCOUNT_RESTRICTED} 예외를 발생시킵니다.</li>
+     * <li>신규 회원인 경우: 회원가입용 임시 토큰을 발급하고 {@code 202 Accepted}를 반환합니다.</li>
+     * <li>기존 회원인 경우: 서비스 이용을 위한 Access/Refresh Token을 발급하고 Redis에 저장한 뒤 {@code 200 OK}를 반환합니다.</li>
+     * </ol>
      */
     @Override
     public ResponseEntity<?> socialLogin(SocialLoginRequest request) {
@@ -120,10 +127,10 @@ public class AuthServiceImpl implements AuthService {
      * 유저의 계정 상태가 로그인 가능한 상태인지 검증합니다.
      * <p>
      * 문자열 비교를 통해 정지(SUSPENDED), 휴면(DORMANT), 삭제(DELETED) 상태일 경우
-     * {@link AuthException}을 발생시킵니다.
+     * {@link AuthException} (ACCOUNT_RESTRICTED)을 발생시킵니다.
      *
      * @param status 유저의 현재 상태 문자열
-     * @param email  로그인을 시도하는 이메일 (로깅용)
+     * @param email  로그인을 시도하는 이메일 (로깅 및 식별용)
      */
     private void validateUserStatus(String status, String email) {
         if ("SUSPENDED".equals(status)
@@ -137,10 +144,13 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * 상세 처리 프로세스:
-     * 1. {@link RateLimitService}를 통해 해당 IP의 차단(Ban) 여부를 우선 확인
-     * 2. 이미 차단된 IP일 경우 즉시 {@code TOO_MANY_REQUESTS} 예외를 발생시켜 접근 제어
-     * 3. 차단되지 않은 경우 시도 횟수를 증가시키며, 횟수가 임계치(5회)에 도달하면 10분간 IP 차단 및 기록 삭제 수행
+     * <b>상세 처리 프로세스:</b>
+     * <ol>
+     * <li>{@link RateLimitService}를 통해 해당 클라이언트 IP의 차단(Ban) 여부를 우선 확인합니다.</li>
+     * <li>이미 차단된 IP일 경우 즉시 {@code TOO_MANY_REQUESTS} 예외를 발생시켜 접근을 거부합니다.</li>
+     * <li>차단되지 않은 경우 요청 횟수를 1 증가시킵니다.</li>
+     * <li>요청 횟수가 임계치(5회)에 도달하면 해당 IP를 10분간 차단하고, 기존 카운트 기록을 초기화한 후 예외를 발생시킵니다.</li>
+     * </ol>
      */
     @Override
     public void checkRateLimit(String clientIp) {
@@ -163,11 +173,13 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * 상세 처리 프로세스:
-     * 1. 요청받은 Refresh Token을 이용해 Redis에서 저장된 토큰 정보를 조회합니다.
-     * 2. 토큰이 존재하지 않을 경우 {@code TOKEN_NOT_FOUND} 예외를 발생시킵니다.
-     * 3. 토큰이 존재하면 Redis에서 해당 데이터를 삭제하여 재발급을 불가능하게 만듭니다.
-     * 4. Access Token의 남은 유효 시간을 계산하여 Redis 블랙리스트에 등록합니다.
+     * <b>상세 처리 프로세스:</b>
+     * <ol>
+     * <li>요청받은 Refresh Token을 사용하여 Redis에 저장된 토큰 정보를 조회합니다. (없을 시 {@code TOKEN_NOT_FOUND} 예외)</li>
+     * <li>조회된 Refresh Token 데이터를 Redis에서 삭제하여 더 이상 재발급에 사용할 수 없도록 만듭니다.</li>
+     * <li>현재 사용 중인 Access Token의 남은 유효 시간을 계산합니다.</li>
+     * <li>남은 시간이 있다면 Redis 블랙리스트에 해당 Access Token을 등록하여 접근을 차단합니다.</li>
+     * </ol>
      */
     @Transactional
     @Override
@@ -192,11 +204,14 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * 상세 처리 프로세스:
-     * 1. 전달받은 Refresh Token의 유효성(서명, 만료 여부)을 JWT 자체 검증으로 확인
-     * 2. Redis 조회: 해당 토큰이 실제로 저장되어 있는지 확인 (만료되거나 이미 사용된 경우 예외 발생)
-     * 3. RTR 수행: 기존 토큰을 삭제하고, 동일한 유저 정보로 새로운 Access/Refresh Token 생성
-     * 4. 새로운 Refresh Token을 Redis에 저장 및 응답 반환
+     * <b>상세 처리 프로세스:</b>
+     * <ol>
+     * <li>전달받은 Refresh Token의 유효성(서명, 만료 여부)을 JWT 자체 검증 로직으로 확인합니다. (실패 시 {@code EXPIRED_REFRESH_TOKEN} 예외)</li>
+     * <li>Redis를 조회하여 해당 토큰이 실제로 저장되어 있고 유효한지 확인합니다. (없을 시 {@code TOKEN_NOT_FOUND} 예외)</li>
+     * <li><b>RTR(Refresh Token Rotation):</b> 보안을 위해 기존 Refresh Token을 삭제합니다.</li>
+     * <li>동일한 유저 정보(ID, Role)로 새로운 Access Token과 Refresh Token을 생성합니다.</li>
+     * <li>새로운 Refresh Token을 Redis에 저장하고, 갱신된 토큰 정보를 반환합니다.</li>
+     * </ol>
      */
     @Transactional
     @Override
@@ -233,5 +248,54 @@ public class AuthServiceImpl implements AuthService {
         long expiresInSeconds = jwtTokenProvider.getAccessTokenValidityInMilliseconds() / 1000;
 
         return TokenResponse.toDto(newAccessToken, newRefreshToken, expiresInSeconds);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * <b>상세 처리 프로세스:</b>
+     * <ol>
+     * <li>{@link PetService#findPetIdByDeviceId}를 호출하여 디바이스 ID와 매핑된 펫 ID를 조회합니다.</li>
+     * <li>조회 결과가 없을 경우 {@code DEVICE_NOT_FOUND} 예외를 발생시켜 로그인을 실패 처리합니다.</li>
+     * <li>획득한 펫 ID를 기반으로 고유 UUID를 생성하고, 권한을 `ROLE_DEVICE`로 설정하여 AccessToken을 발급합니다.</li>
+     * <li>Refresh Token을 생성하고 Redis에 저장합니다. (User ID 필드에 디바이스 UUID 저장)</li>
+     * <li>생성된 토큰들과 펫 ID 정보를 응답 객체에 담아 반환합니다.</li>
+     * </ol>
+     */
+    @Transactional
+    @Override
+    public DeviceAuthResponse deviceLogin(DeviceAuthRequest request) {
+
+        String deviceId = request.getDeviceId();
+
+        Long petId = petService.findPetIdByDeviceId(deviceId)
+                .orElseThrow(() -> {
+                    log.warn("장치 로그인 실패 - 등록되지 않은 디바이스 ID: {}", deviceId);
+                    return new AuthException(DEVICE_NOT_FOUND);
+                });
+
+        UUID deviceUuid = UUID.nameUUIDFromBytes(("DEVICE:" + petId).getBytes());
+        String role = "ROLE_DEVICE";
+
+        String accessToken = jwtTokenProvider.createAccessToken(deviceUuid, role);
+        String refreshToken = jwtTokenProvider.createRefreshToken(deviceUuid);
+
+        refreshTokenRepository.save(RefreshToken.builder()
+                .usersId(deviceUuid.toString())
+                .refreshToken(refreshToken)
+                .role(role)
+                .build());
+
+        log.info("장치 로그인 성공 - Device ID: {}, Pet ID: {}", deviceId, petId);
+
+        long expiresInSeconds = jwtTokenProvider.getAccessTokenValidityInMilliseconds() / 1000;
+
+        return DeviceAuthResponse.toDto(
+                "로그인이 완료되었습니다.",
+                accessToken,
+                refreshToken,
+                expiresInSeconds,
+                petId
+        );
     }
 }

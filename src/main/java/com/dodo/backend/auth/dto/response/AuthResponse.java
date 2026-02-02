@@ -117,4 +117,49 @@ public class AuthResponse {
                     .build();
         }
     }
+
+    /**
+     * 장치 인증 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "장치 인증 결과 응답")
+    public static class DeviceAuthResponse {
+
+        @Schema(description = "응답 메시지", example = "인증이 완료되었습니다.")
+        private String message;
+
+        @Schema(description = "액세스 토큰")
+        private String accessToken;
+
+        @Schema(description = "리프레시 토큰")
+        private String refreshToken;
+
+        @Schema(description = "액세스 토큰 만료 시간(초)", example = "3600")
+        private Long accessTokenExpiresIn;
+
+        @Schema(description = "연동된 반려동물 ID", example = "1")
+        private Long petId;
+
+        /**
+         * 장치 인증 성공 정보를 바탕으로 응답 DTO를 생성하는 정적 팩토리 메서드입니다.
+         *
+         * @param message              결과 메시지
+         * @param accessToken          발급된 액세스 토큰
+         * @param refreshToken         발급된 리프레시 토큰
+         * @param accessTokenExpiresIn 액세스 토큰 만료 시간 (초 단위)
+         * @param petId                인증된 장치와 연결된 반려동물의 ID
+         * @return 초기화된 {@link DeviceAuthResponse} 객체
+         */
+        public static DeviceAuthResponse toDto(String message, String accessToken, String refreshToken, Long accessTokenExpiresIn, Long petId) {
+            return DeviceAuthResponse.builder()
+                    .message(message)
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
+                    .accessTokenExpiresIn(accessTokenExpiresIn)
+                    .petId(petId)
+                    .build();
+        }
+    }
 }

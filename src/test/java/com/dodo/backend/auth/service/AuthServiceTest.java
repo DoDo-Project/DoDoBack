@@ -1,11 +1,15 @@
 package com.dodo.backend.auth.service;
 
+import com.dodo.backend.auth.dto.request.AuthRequest.DeviceAuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
 import com.dodo.backend.auth.entity.RefreshToken;
 import com.dodo.backend.auth.exception.AuthErrorCode;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.auth.repository.RefreshTokenRepository;
 import com.dodo.backend.common.jwt.JwtTokenProvider;
+import com.dodo.backend.pet.service.PetService;
+import com.dodo.backend.pet.service.PetServiceImpl;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import static com.dodo.backend.auth.dto.response.AuthResponse.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,6 +37,7 @@ import static org.mockito.Mockito.verify;
  * <p>
  * 주로 로그아웃 처리 시 리프레시 토큰 삭제 및 액세스 토큰의 블랙리스트 처리 로직을 중점적으로 테스트합니다.
  */
+@Slf4j
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
@@ -50,6 +56,9 @@ class AuthServiceTest {
     @Mock
     private ValueOperations<String, Object> valueOperations;
 
+    @Mock
+    private PetServiceImpl petService;
+
     /**
      * 로그아웃 성공 시나리오를 테스트합니다.
      * <p>
@@ -59,6 +68,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("로그아웃 성공 - 리프레시 토큰 삭제 및 액세스 토큰 블랙리스트 등록")
     void logout_Success() {
+        log.info("로그아웃 성공 테스트를 시작합니다.");
         // given
         String refreshTokenStr = "valid-refresh-token";
         String accessTokenStr = "valid-access-token";
@@ -75,6 +85,7 @@ class AuthServiceTest {
                 .refreshToken(refreshTokenStr)
                 .build();
 
+        log.info("리프레시 토큰이 DB에 존재하고 액세스 토큰의 유효시간이 남아있다고 설정합니다.");
         given(refreshTokenRepository.findByRefreshToken(refreshTokenStr))
                 .willReturn(Optional.of(refreshTokenEntity));
 
@@ -84,9 +95,11 @@ class AuthServiceTest {
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
 
         // when
+        log.info("로그아웃 서비스를 호출합니다.");
         authService.logout(request, accessTokenStr);
 
         // then
+        log.info("DB에서 리프레시 토큰이 삭제되었는지, Redis 블랙리스트에 등록되었는지 검증합니다.");
         verify(refreshTokenRepository).delete(refreshTokenEntity);
 
         verify(valueOperations).set(
@@ -95,6 +108,7 @@ class AuthServiceTest {
                 eq(remainingTime),
                 eq(TimeUnit.MILLISECONDS)
         );
+        log.info("로그아웃 성공 테스트가 통과되었습니다.");
     }
 
     /**
@@ -106,6 +120,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("로그아웃 성공 - 액세스 토큰이 이미 만료된 경우 (블랙리스트 등록 안 함)")
     void logout_Success_ExpiredAccessToken() {
+        log.info("만료된 토큰으로 로그아웃 시도 성공 테스트를 시작합니다.");
         // given
         String refreshTokenStr = "valid-refresh-token";
         String accessTokenStr = "expired-access-token";
@@ -120,18 +135,22 @@ class AuthServiceTest {
                 .refreshToken(refreshTokenStr)
                 .build();
 
+        log.info("리프레시 토큰은 유효하지만 액세스 토큰은 만료되었다고 설정합니다.");
         given(refreshTokenRepository.findByRefreshToken(refreshTokenStr))
                 .willReturn(Optional.of(refreshTokenEntity));
 
         given(jwtTokenProvider.getRemainingValidTime(accessTokenStr))
                 .willReturn(0L);
         // when
+        log.info("로그아웃 서비스를 호출합니다.");
         authService.logout(request, accessTokenStr);
 
         // then
+        log.info("리프레시 토큰 삭제는 호출되지만 블랙리스트 등록은 호출되지 않았는지 검증합니다.");
         verify(refreshTokenRepository).delete(refreshTokenEntity);
 
         verify(redisTemplate, never()).opsForValue();
+        log.info("만료된 토큰 로그아웃 테스트가 통과되었습니다.");
     }
 
     /**
@@ -142,6 +161,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("로그아웃 실패 - 존재하지 않는 리프레시 토큰")
     void logout_Fail_NotFoundRefreshToken() {
+        log.info("존재하지 않는 리프레시 토큰으로 인한 로그아웃 실패 테스트를 시작합니다.");
         // given
         String invalidRefreshToken = "invalid-token";
         String accessTokenStr = "any-access-token";
@@ -150,10 +170,12 @@ class AuthServiceTest {
                 .refreshToken(invalidRefreshToken)
                 .build();
 
+        log.info("DB에 해당 리프레시 토큰이 없다고 설정합니다.");
         given(refreshTokenRepository.findByRefreshToken(invalidRefreshToken))
                 .willReturn(Optional.empty());
 
         // when & then
+        log.info("로그아웃 호출 시 토큰 미발견 예외가 발생하는지 확인합니다.");
         assertThatThrownBy(() -> authService.logout(request, accessTokenStr))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode")
@@ -161,6 +183,7 @@ class AuthServiceTest {
 
         verify(refreshTokenRepository, never()).delete(any());
         verify(redisTemplate, never()).opsForValue();
+        log.info("리프레시 토큰 미발견 실패 테스트가 통과되었습니다.");
     }
 
     /**
@@ -172,6 +195,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("토큰 재발급 성공 - RTR 적용 및 신규 토큰 발급")
     void reissueToken_Success() {
+        log.info("토큰 재발급 성공 테스트를 시작합니다.");
         // given
         String oldRefreshTokenStr = "valid-old-refresh-token";
         String newAccessTokenStr = "new-access-token";
@@ -188,6 +212,7 @@ class AuthServiceTest {
                 .role(role)
                 .build();
 
+        log.info("리프레시 토큰이 유효하고 정상적으로 새 토큰이 발급된다고 설정합니다.");
         given(jwtTokenProvider.validateToken(oldRefreshTokenStr))
                 .willReturn(true);
         given(refreshTokenRepository.findByRefreshToken(oldRefreshTokenStr))
@@ -200,15 +225,18 @@ class AuthServiceTest {
                 .willReturn(3600000L);
 
         // when
-        com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse response =
+        log.info("토큰 재발급 서비스를 호출합니다.");
+        TokenResponse response =
                 authService.reissueToken(request);
 
         // then
+        log.info("기존 토큰 삭제 및 새 토큰 저장, 그리고 응답값이 일치하는지 검증합니다.");
         verify(refreshTokenRepository).delete(oldTokenEntity);
         verify(refreshTokenRepository).save(any(RefreshToken.class));
 
         assertThat(response.getAccessToken()).isEqualTo(newAccessTokenStr);
         assertThat(response.getRefreshToken()).isEqualTo(newRefreshTokenStr);
+        log.info("토큰 재발급 성공 테스트가 통과되었습니다.");
     }
 
     /**
@@ -219,21 +247,25 @@ class AuthServiceTest {
     @Test
     @DisplayName("토큰 재발급 실패 - 유효하지 않은 Refresh Token")
     void reissueToken_Fail_InvalidToken() {
+        log.info("유효하지 않은 토큰으로 인한 재발급 실패 테스트를 시작합니다.");
         // given
         String invalidToken = "invalid-token";
         com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest request =
                 new com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest(invalidToken);
 
+        log.info("토큰 검증 결과가 실패라고 설정합니다.");
         given(jwtTokenProvider.validateToken(invalidToken))
                 .willReturn(false);
 
         // when & then
+        log.info("재발급 호출 시 만료된 토큰 예외가 발생하는지 확인합니다.");
         assertThatThrownBy(() -> authService.reissueToken(request))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode")
                 .isEqualTo(AuthErrorCode.EXPIRED_REFRESH_TOKEN);
 
         verify(refreshTokenRepository, never()).delete(any());
+        log.info("유효하지 않은 토큰 실패 테스트가 통과되었습니다.");
     }
 
     /**
@@ -245,22 +277,105 @@ class AuthServiceTest {
     @Test
     @DisplayName("토큰 재발급 실패 - Redis에 존재하지 않는 Refresh Token")
     void reissueToken_Fail_NotFoundInRedis() {
+        log.info("Redis 미발견으로 인한 재발급 실패 테스트를 시작합니다.");
         // given
         String notFoundToken = "valid-format-token";
         com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest request =
                 new com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest(notFoundToken);
 
+        log.info("토큰 형식은 맞지만 DB 조회 결과가 없다고 설정합니다.");
         given(jwtTokenProvider.validateToken(notFoundToken))
                 .willReturn(true);
         given(refreshTokenRepository.findByRefreshToken(notFoundToken))
                 .willReturn(Optional.empty());
 
         // when & then
+        log.info("재발급 호출 시 토큰 미발견 예외가 발생하는지 확인합니다.");
         assertThatThrownBy(() -> authService.reissueToken(request))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode")
                 .isEqualTo(AuthErrorCode.TOKEN_NOT_FOUND);
 
         verify(refreshTokenRepository, never()).delete(any());
+        log.info("Redis 미발견 실패 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 장치 로그인 성공 시나리오를 테스트합니다.
+     * <p>
+     * 유효한 Device ID로 요청 시, PetService를 통해 Pet ID를 조회하고
+     * 정상적으로 토큰을 발급하여 Redis에 저장해야 합니다.
+     */
+    @Test
+    @DisplayName("장치 로그인 성공 - 펫 ID 반환 및 토큰 발급")
+    void deviceLogin_Success() {
+        log.info("장치 로그인 성공 테스트를 시작합니다.");
+        // given
+        String deviceId = "valid-device-123";
+        Long petId = 100L;
+        String accessToken = "device-access-token";
+        String refreshToken = "device-refresh-token";
+        String role = "ROLE_DEVICE";
+
+        DeviceAuthRequest request = DeviceAuthRequest.builder()
+                .deviceId(deviceId)
+                .build();
+
+        log.info("디바이스 ID로 펫 정보가 조회되고 토큰이 정상 발급된다고 설정합니다.");
+        given(petService.findPetIdByDeviceId(deviceId))
+                .willReturn(Optional.of(petId));
+
+        given(jwtTokenProvider.createAccessToken(any(UUID.class), eq(role)))
+                .willReturn(accessToken);
+        given(jwtTokenProvider.createRefreshToken(any(UUID.class)))
+                .willReturn(refreshToken);
+        given(jwtTokenProvider.getAccessTokenValidityInMilliseconds())
+                .willReturn(3600000L);
+
+        // when
+        log.info("장치 로그인 서비스를 호출합니다.");
+        DeviceAuthResponse response = authService.deviceLogin(request);
+
+        // then
+        log.info("응답 토큰과 펫 ID가 일치하는지 확인하고 Redis 저장이 수행되었는지 검증합니다.");
+        assertThat(response.getAccessToken()).isEqualTo(accessToken);
+        assertThat(response.getRefreshToken()).isEqualTo(refreshToken);
+        assertThat(response.getPetId()).isEqualTo(petId);
+        assertThat(response.getMessage()).isEqualTo("로그인이 완료되었습니다.");
+
+        verify(petService).findPetIdByDeviceId(deviceId);
+        verify(refreshTokenRepository).save(any(RefreshToken.class));
+        log.info("장치 로그인 성공 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 등록되지 않은 디바이스로 로그인을 시도하는 시나리오를 테스트합니다.
+     * <p>
+     * PetService 조회 결과가 없을 경우 {@link AuthException}(DEVICE_NOT_FOUND)가 발생해야 합니다.
+     */
+    @Test
+    @DisplayName("장치 로그인 실패 - 등록되지 않은 디바이스")
+    void deviceLogin_Fail_DeviceNotFound() {
+        log.info("등록되지 않은 디바이스 로그인 실패 테스트를 시작합니다.");
+        // given
+        String unknownDeviceId = "unknown-device";
+        DeviceAuthRequest request = DeviceAuthRequest.builder()
+                .deviceId(unknownDeviceId)
+                .build();
+
+        log.info("디바이스 ID 조회 결과가 없다고 설정합니다.");
+        given(petService.findPetIdByDeviceId(unknownDeviceId))
+                .willReturn(Optional.empty());
+
+        // when & then
+        log.info("로그인 호출 시 디바이스 미발견 예외가 발생하는지 확인합니다.");
+        assertThatThrownBy(() -> authService.deviceLogin(request))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.DEVICE_NOT_FOUND);
+
+        verify(petService).findPetIdByDeviceId(unknownDeviceId);
+        verify(refreshTokenRepository, never()).save(any());
+        log.info("등록되지 않은 디바이스 실패 테스트가 통과되었습니다.");
     }
 }

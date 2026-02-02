@@ -1,9 +1,11 @@
 package com.dodo.backend.auth.service;
 
 import com.dodo.backend.auth.dto.request.AuthRequest;
+import com.dodo.backend.auth.dto.request.AuthRequest.DeviceAuthRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.LogoutRequest;
 import com.dodo.backend.auth.dto.request.AuthRequest.ReissueRequest;
 import com.dodo.backend.auth.dto.response.AuthResponse;
+import com.dodo.backend.auth.dto.response.AuthResponse.DeviceAuthResponse;
 import com.dodo.backend.auth.dto.response.AuthResponse.TokenResponse;
 import org.springframework.http.ResponseEntity;
 
@@ -56,4 +58,15 @@ public interface AuthService {
      * @throws com.dodo.backend.auth.exception.AuthException 토큰이 유효하지 않거나 만료된 경우, 또는 Redis에 존재하지 않는 경우
      */
     TokenResponse reissueToken(ReissueRequest request);
+
+    /**
+     * 장치(임베디드) 로그인을 수행합니다.
+     * <p>
+     * 디바이스 ID를 기반으로 등록된 반려동물을 조회하고,
+     * 해당 디바이스 권한(ROLE_DEVICE)으로 토큰을 발급합니다.
+     *
+     * @param request 디바이스 ID 정보가 담긴 요청 객체
+     * @return 토큰 및 연결된 펫 정보
+     */
+    DeviceAuthResponse deviceLogin(DeviceAuthRequest request);
 }

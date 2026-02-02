@@ -25,10 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 import static com.dodo.backend.pet.exception.PetErrorCode.*;
 
@@ -429,5 +426,15 @@ public class PetServiceImpl implements PetService {
                 newDeviceId,
                 "디바이스가 성공적으로 재등록되었습니다."
         );
+    }
+
+    /**
+     * 디바이스 ID로 등록된 반려동물 ID를 조회합니다.
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public Optional<Long> findPetIdByDeviceId(String deviceId) {
+        return petRepository.findByDeviceId(deviceId)
+                .map(Pet::getPetId);
     }
 }

@@ -53,6 +53,7 @@ public class AuthRequest {
      * 액세스 토큰 재발급을 위한 요청 DTO입니다.
      */
     @Getter
+    @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     @Schema(description = "토큰 재발급 요청")
@@ -61,5 +62,19 @@ public class AuthRequest {
         @Schema(description = "만료된 액세스 토큰을 갱신하기 위한 리프레시 토큰", example = "abc12300f29184b...")
         @NotBlank(message = "리프레시 토큰은 필수 값입니다.")
         private String refreshToken;
+    }
+
+    /**
+     * 장치 인증(로그인) 요청 DTO
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @Schema(description = "장치 인증 요청")
+    public static class DeviceAuthRequest {
+        @NotBlank(message = "디바이스 ID는 필수입니다.")
+        @Schema(description = "디바이스 고유 ID", example = "ABC123XYZ")
+        private String deviceId;
     }
 }

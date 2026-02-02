@@ -54,12 +54,6 @@ class PetServiceTest {
     private UserPetService userPetService;
 
     @Mock
-    private PetWeightService petWeightService;
-
-    @Mock
-    private ImageFileService imageFileService;
-
-    @Mock
     private PetMapper petMapper;
 
     /**
@@ -150,10 +144,12 @@ class PetServiceTest {
      * 반려동물 정보 수정 성공 시나리오를 테스트합니다.
      */
     @Test
-    @DisplayName("펫 수정 성공: 등록번호를 변경해도 중복이 없으면 정상적으로 수정된다.")
-    void updatePet_Success_NewRegistrationNumber() {
+    @DisplayName("펫 수정 성공: 소유자가 요청하고 중복이 없으면 정상적으로 수정된다.")
+    void updatePet_Success() {
         // given
         Long petId = 1L;
+        UUID userId = UUID.randomUUID();
+
         Pet existingPet = Pet.builder()
                 .petId(petId)
                 .registrationNumber("OLD-123")
@@ -169,16 +165,43 @@ class PetServiceTest {
                 .build();
 
         given(petRepository.findById(petId)).willReturn(Optional.of(existingPet));
+        given(userPetService.isUserPetOwner(userId, petId)).willReturn(true);
         given(petRepository.existsByRegistrationNumber("NEW-999")).willReturn(false);
 
         // when
-        PetResponse.PetUpdateResponse response = petService.updatePet(petId, request);
+        PetResponse.PetUpdateResponse response = petService.updatePet(petId, request, userId);
 
         // then
         assertNotNull(response);
         assertEquals("새로운초코", response.getPetName());
 
         verify(petMapper, times(1)).updatePetProfileInfo(request, petId);
+    }
+
+    /**
+     * 반려동물 정보 수정 실패: 권한 없음 시나리오를 테스트합니다.
+     */
+    @Test
+    @DisplayName("펫 수정 실패: 소유자가 아닌 경우 권한 없음 예외가 발생한다.")
+    void updatePet_Fail_PermissionDenied() {
+        // given
+        Long petId = 1L;
+        UUID userId = UUID.randomUUID();
+        PetRequest.PetUpdateRequest request = PetRequest.PetUpdateRequest.builder().build();
+
+        Pet existingPet = Pet.builder().petId(petId).build();
+
+        given(petRepository.findById(petId)).willReturn(Optional.of(existingPet));
+        given(userPetService.isUserPetOwner(userId, petId)).willReturn(false);
+
+        // when
+        PetException exception = assertThrows(PetException.class, () ->
+                petService.updatePet(petId, request, userId)
+        );
+
+        // then
+        assertEquals(PetErrorCode.UPDATE_PERMISSION_DENIED, exception.getErrorCode());
+        verify(petMapper, times(0)).updatePetProfileInfo(any(), any());
     }
 
     /**
@@ -189,13 +212,14 @@ class PetServiceTest {
     void updatePet_Fail_NotFound() {
         // given
         Long petId = 999L;
+        UUID userId = UUID.randomUUID();
         PetRequest.PetUpdateRequest request = PetRequest.PetUpdateRequest.builder().build();
 
         given(petRepository.findById(petId)).willReturn(Optional.empty());
 
         // when
         PetException exception = assertThrows(PetException.class, () ->
-                petService.updatePet(petId, request)
+                petService.updatePet(petId, request, userId)
         );
 
         // then
@@ -280,5 +304,72 @@ class PetServiceTest {
         assertEquals("가족 등록을 신청했습니다. 승인을 기다려주세요.", response.getMessage());
 
         verify(userPetService, times(1)).registerByInvitation(userId, invitationCode);
+    }
+
+    /**
+     * 펫 삭제 성공 시나리오를 테스트합니다.
+     */
+    @Test
+    @DisplayName("펫 삭제 성공: 소유자인 경우 펫 정보를 삭제한다.")
+    void deletePet_Success() {
+        // given
+        Long petId = 1L;
+        UUID userId = UUID.randomUUID();
+        Pet pet = Pet.builder().petId(petId).build();
+
+        given(petRepository.findById(petId)).willReturn(Optional.of(pet));
+        given(userPetService.isUserPetOwner(userId, petId)).willReturn(true);
+
+        // when
+        petService.deletePet(userId, petId);
+
+        // then
+        verify(petRepository, times(1)).delete(pet);
+    }
+
+    /**
+     * 펫 삭제 실패: 권한 없음 시나리오를 테스트합니다.
+     */
+    @Test
+    @DisplayName("펫 삭제 실패: 소유자가 아닌 경우 예외가 발생한다.")
+    void deletePet_Fail_PermissionDenied() {
+        // given
+        Long petId = 1L;
+        UUID userId = UUID.randomUUID();
+        Pet pet = Pet.builder().petId(petId).build();
+
+        given(petRepository.findById(petId)).willReturn(Optional.of(pet));
+        given(userPetService.isUserPetOwner(userId, petId)).willReturn(false);
+
+        // when
+        PetException exception = assertThrows(PetException.class, () ->
+                petService.deletePet(userId, petId)
+        );
+
+        // then
+        assertEquals(PetErrorCode.ACTION_PERMISSION_DENIED, exception.getErrorCode());
+        verify(petRepository, times(0)).delete(any());
+    }
+
+    /**
+     * 펫 삭제 실패: 존재하지 않는 펫 ID 시나리오를 테스트합니다.
+     */
+    @Test
+    @DisplayName("펫 삭제 실패: 펫이 존재하지 않는 경우 예외가 발생한다.")
+    void deletePet_Fail_NotFound() {
+        // given
+        Long petId = 999L;
+        UUID userId = UUID.randomUUID();
+
+        given(petRepository.findById(petId)).willReturn(Optional.empty());
+
+        // when
+        PetException exception = assertThrows(PetException.class, () ->
+                petService.deletePet(userId, petId)
+        );
+
+        // then
+        assertEquals(PetErrorCode.PET_NOT_FOUND, exception.getErrorCode());
+        verify(userPetService, times(0)).isUserPetOwner(any(), any());
     }
 }

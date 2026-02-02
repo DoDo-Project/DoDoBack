@@ -11,7 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -59,4 +59,34 @@ public interface UserPetRepository extends JpaRepository<UserPet, UserPetId> {
             "   WHERE my.user.usersId = :managerId AND my.registrationStatus = 'APPROVED'" +
             ")")
     Page<UserPet> findAllPendingRequestsByManager(@Param("managerId") UUID managerId, Pageable pageable);
+
+    /**
+     * 특정 유저가 특정 반려동물의 소유자(APPROVED 상태)인지 확인합니다.
+     * Spring Data JPA의 쿼리 메서드 기능을 사용하여 구현합니다.
+     *
+     * @param userId 유저 ID
+     * @param petId 펫 ID
+     * @param status 등록 상태 (주로 APPROVED)
+     * @return 존재 여부 (true/false)
+     */
+    boolean existsByUser_UsersIdAndPet_PetIdAndRegistrationStatus(UUID userId, Long petId, RegistrationStatus status);
+
+    /**
+     * 유저 ID와 펫 ID를 이용해 특정 UserPet 엔티티(관계 정보)를 조회합니다.
+     * (삭제 대상을 찾을 때 사용)
+     *
+     * @param userId 유저 ID
+     * @param petId  펫 ID
+     * @return UserPet 엔티티 (Optional)
+     */
+    Optional<UserPet> findByUser_UsersIdAndPet_PetId(UUID userId, Long petId);
+
+    /**
+     * 특정 반려동물에게 연결된 가족(UserPet)이 존재하는지 확인합니다.
+     * (마지막 남은 가족인지 확인할 때 사용)
+     *
+     * @param petId 확인할 펫 ID
+     * @return 연결된 데이터가 하나라도 있으면 true, 없으면 false
+     */
+    boolean existsByPet_PetId(Long petId);
 }

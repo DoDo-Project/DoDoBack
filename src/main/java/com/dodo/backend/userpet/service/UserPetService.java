@@ -85,4 +85,30 @@ public interface UserPetService {
      * @return "pendingPetPage" 키에 Page&lt;UserPet&gt; 엔티티가 담긴 Map 객체
      */
     Map<String, Object> getMyPendingPets(UUID userId, Pageable pageable);
+
+    /**
+     * 해당 유저가 특정 반려동물의 정식 소유자(APPROVED)인지 확인합니다.
+     * 보안 검증(IDOR 방지)을 위해 사용됩니다.
+     *
+     * @param userId 확인할 유저 ID
+     * @param petId 확인할 펫 ID
+     * @return 소유자라면 true, 아니면 false
+     */
+    boolean isUserPetOwner(UUID userId, Long petId);
+
+    /**
+     * 특정 유저와 펫의 연결 관계(UserPet)를 삭제합니다. (가족 나가기)
+     *
+     * @param userId 삭제할 유저 ID
+     * @param petId  삭제할 펫 ID
+     */
+    void deleteUserPetRelation(UUID userId, Long petId);
+
+    /**
+     * 해당 펫에 등록된 가족이 한 명이라도 남아있는지 확인합니다.
+     *
+     * @param petId 확인할 펫 ID
+     * @return 가족이 남아있다면 true
+     */
+    boolean existsFamilyMember(Long petId);
 }

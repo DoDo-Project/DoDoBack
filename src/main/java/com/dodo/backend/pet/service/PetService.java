@@ -29,7 +29,7 @@ public interface PetService {
      * @param request 수정할 정보를 담은 요청 객체
      * @return 수정이 완료된 후의 최신 반려동물 상세 정보 응답 객체
      */
-    PetUpdateResponse updatePet(Long petId, PetUpdateRequest request);
+    PetUpdateResponse updatePet(Long petId, PetUpdateRequest request, UUID userId);
 
     /**
      * 반려동물 가족 초대를 위한 코드를 발급합니다.
@@ -86,4 +86,12 @@ public interface PetService {
      * @return 페이징된 신청 내역 목록 응답 DTO
      */
     PetApplicationListResponse getMyPendingApplications(UUID userId, Pageable pageable);
+
+    /**
+     * 반려동물 정보를 삭제합니다.
+     *
+     * @param userId 요청한 사용자의 ID (권한 검증용)
+     * @param petId  삭제할 반려동물 ID
+     */
+    void deletePet(UUID userId, Long petId);
 }

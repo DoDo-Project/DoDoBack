@@ -13,7 +13,7 @@ import java.util.UUID;
 /**
  * 펫 도메인과 관련된 응답 데이터를 캡슐화하는 DTO 그룹 클래스입니다.
  * <p>
- * 펫 등록, 수정, 조회, 가족 초대 및 승인 등 다양한 API 응답에 사용되는
+ * 펫 등록, 수정, 조회, 가족 초대 및 승인, 삭제 등 다양한 API 응답에 사용되는
  * Inner Static Class들을 포함하고 있습니다.
  */
 @Schema(description = "펫 관련 응답 DTO 그룹")
@@ -442,6 +442,30 @@ public class PetResponse {
                         .requestedAt(requestedAt)
                         .build();
             }
+        }
+    }
+
+    /**
+     * 반려동물 정보가 삭제되었을 때 반환되는 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "반려동물 삭제 결과 응답")
+    public static class PetDeleteResponse {
+
+        @Schema(description = "처리 결과 메시지", example = "반려동물 목록에서 삭제되었습니다.")
+        private String message;
+
+        /**
+         * 성공 메시지를 담은 응답 DTO를 생성합니다.
+         *
+         * @return 초기화된 {@link PetDeleteResponse} 객체
+         */
+        public static PetDeleteResponse toDto(String message) {
+            return PetDeleteResponse.builder()
+                    .message(message)
+                    .build();
         }
     }
 }

@@ -108,11 +108,16 @@ public class PetServiceImpl implements PetService {
      */
     @Transactional
     @Override
-    public PetUpdateResponse updatePet(Long petId, PetUpdateRequest request) {
+    public PetUpdateResponse updatePet(Long petId, PetUpdateRequest request, UUID userId) {
 
         Pet pet = petRepository.findById(petId)
                 .orElseThrow(() -> new PetException(PET_NOT_FOUND));
 
+        boolean isOwner = userPetService.isUserPetOwner(userId, petId);
+
+        if (!isOwner) {
+            throw new PetException(UPDATE_PERMISSION_DENIED);
+        }
         if (request.getRegistrationNumber() != null && !Objects.equals(pet.getRegistrationNumber(), request.getRegistrationNumber())) {
             if (petRepository.existsByRegistrationNumber(request.getRegistrationNumber())) {
                 log.warn("등록번호 중복 발생 - PetId: {}, 번호: {}", petId, request.getRegistrationNumber());
@@ -346,5 +351,41 @@ public class PetServiceImpl implements PetService {
         );
 
         return PetApplicationListResponse.toDto(dtoPage, "조회를 성공했습니다.");
+    }
+
+    /**
+     * 반려동물 가족 그룹에서 탈퇴(삭제)합니다.
+     * <p>
+     * <ol>
+     * <li>요청한 유저가 해당 펫의 가족(소유자)인지 검증합니다.</li>
+     * <li>해당 유저와 펫의 연결 관계를 삭제합니다. (가족 나가기)</li>
+     * <li>삭제 후, 해당 펫에 남은 가족이 있는지 확인합니다.</li>
+     * <li>만약 남은 가족이 한 명도 없다면, 펫 정보(Pet) 자체를 DB에서 완전히 삭제합니다.</li>
+     * </ol>
+     *
+     * @param userId 요청한 사용자의 ID
+     * @param petId  삭제(탈퇴)할 반려동물 ID
+     */
+    @Transactional
+    @Override
+    public void deletePet(UUID userId, Long petId) {
+
+        if (!petRepository.existsById(petId)) {
+            throw new PetException(PET_NOT_FOUND);
+        }
+
+        if (!userPetService.isUserPetOwner(userId, petId)) {
+            throw new PetException(ACTION_PERMISSION_DENIED);
+        }
+
+        userPetService.deleteUserPetRelation(userId, petId);
+
+        if (!userPetService.existsFamilyMember(petId)) {
+
+            petRepository.deleteById(petId);
+            log.info("마지막 가족 탈퇴로 펫 정보가 완전 삭제되었습니다. PetId: {}", petId);
+        } else {
+            log.info("가족 그룹에서 탈퇴했습니다. (다른 가족이 남아있어 펫 정보 유지) User: {}, PetId: {}", userId, petId);
+        }
     }
 }

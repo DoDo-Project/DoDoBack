@@ -292,4 +292,50 @@ public class UserPetServiceImpl implements UserPetService {
 
         return result;
     }
+
+    /**
+     * 유저가 해당 펫의 소유자인지(APPROVED 상태인지) 검증합니다.
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public boolean isUserPetOwner(UUID userId, Long petId) {
+        return userPetRepository.existsByUser_UsersIdAndPet_PetIdAndRegistrationStatus(
+                userId,
+                petId,
+                RegistrationStatus.APPROVED
+        );
+    }
+
+    /**
+     * 특정 유저와 펫의 연결 관계(UserPet)를 삭제합니다. (가족 나가기)
+     * <p>
+     * 해당 유저가 가족 구성원 목록에서 제거되며, 더 이상 해당 펫에 접근할 수 없게 됩니다.
+     *
+     * @param userId 삭제할 유저 ID
+     * @param petId  삭제할 펫 ID
+     * @throws UserPetException 해당 관계가 존재하지 않을 경우 (NOT_FAMILY_MEMBER)
+     */
+    @Transactional
+    @Override
+    public void deleteUserPetRelation(UUID userId, Long petId) {
+        UserPet userPet = userPetRepository.findByUser_UsersIdAndPet_PetId(userId, petId)
+                .orElseThrow(() -> new UserPetException(PET_NOT_FOUND));
+
+        userPetRepository.delete(userPet);
+        log.info("UserPet 관계 삭제 완료 (가족 나가기) - User: {}, Pet: {}", userId, petId);
+    }
+
+    /**
+     * 해당 펫에 등록된 가족(APPROVED 상태 등)이 한 명이라도 남아있는지 확인합니다.
+     * <p>
+     * 주로 펫의 마지막 가족이 탈퇴했을 때, 펫 정보를 완전히 삭제할지 결정하기 위해 사용됩니다.
+     *
+     * @param petId 확인할 펫 ID
+     * @return 가족이 남아있다면 true, 아무도 없다면 false
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public boolean existsFamilyMember(Long petId) {
+        return userPetRepository.existsByPet_PetId(petId);
+    }
 }

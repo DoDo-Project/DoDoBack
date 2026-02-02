@@ -131,7 +131,7 @@ public class PetController {
         UUID userId = UUID.fromString(userDetails.getUsername());
         log.info("펫 정보 수정 요청 수신 - PetId: {}, User: {}", petId, userId);
 
-        PetUpdateResponse response = petService.updatePet(petId, request);
+        PetUpdateResponse response = petService.updatePet(petId, request, userId);
 
         return ResponseEntity.ok(response);
     }
@@ -398,5 +398,51 @@ public class PetController {
 
         UUID userId = UUID.fromString(userDetails.getUsername());
         return ResponseEntity.ok(petService.getMyPendingApplications(userId, pageable));
+    }
+
+    /**
+     * 반려동물 가족 그룹에서 나갑니다.
+     * <p>
+     * 해당 사용자와 반려동물의 연결을 해제합니다.
+     * 만약 해당 반려동물의 마지막 구성원이라면 펫 정보도 영구적으로 삭제됩니다.
+     *
+     * @param petId       나가려는 반려동물의 ID
+     * @param userDetails 인증된 사용자 정보
+     * @return 결과 메시지 (HTTP 200)
+     */
+    @Operation(summary = "펫 가족 나가기 (삭제)", description = "반려동물 가족 목록에서 나가게 되는데 사용자 외에 다른 가족이 남아있다면 펫 정보는 유지됩니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "반려동물 목록에서 삭제되었습니다.",
+                    content = @Content(schema = @Schema(implementation = PetDeleteResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "403", description = "해당 반려동물에 대한 권한이 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "403 Forbidden", value = "{\"status\": 403, \"message\": \"해당 반려동물에 대한 권한이 없습니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "해당 ID의 반려동물을 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"해당 ID의 반려동물을 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @DeleteMapping("/{petId}")
+    public ResponseEntity<PetDeleteResponse> deletePet(
+            @PathVariable Long petId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        UUID userId = UUID.fromString(userDetails.getUsername());
+        petService.deletePet(userId, petId);
+
+        return ResponseEntity.ok(PetDeleteResponse.toDto("반려동물 목록에서 삭제되었습니다."));
     }
 }

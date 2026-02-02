@@ -4,6 +4,8 @@ import com.dodo.backend.pet.entity.Pet;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 /**
  * {@link Pet} 엔티티의 데이터베이스 접근을 담당하는 리포지토리 인터페이스입니다.
  * <p>
@@ -27,4 +29,12 @@ public interface PetRepository extends JpaRepository<Pet, Long> {
      * @return 존재하면 true, 없으면 false
      */
     boolean existsByDeviceId(String deviceId);
+
+    /**
+     * 디바이스 ID를 기반으로 반려동물 엔티티를 조회합니다.
+     *
+     * @param deviceId 조회할 디바이스 고유 ID
+     * @return 펫 엔티티 (Optional)
+     */
+    Optional<Pet> findByDeviceId(String deviceId);
 }

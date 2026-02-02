@@ -4,6 +4,7 @@ import com.dodo.backend.pet.dto.request.PetRequest.*;
 import com.dodo.backend.pet.dto.response.PetResponse.*;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -102,4 +103,12 @@ public interface PetService {
      * @return 변경된 디바이스 정보 응답
      */
     PetDeviceUpdateResponse updateDevice(UUID userId, Long petId, PetDeviceUpdateRequest request);
+
+    /**
+     * 디바이스 ID로 등록된 반려동물 ID를 조회합니다.
+     *
+     * @param deviceId 조회할 디바이스 고유 ID
+     * @return 펫 ID (존재하지 않으면 Optional.empty())
+     */
+    Optional<Long> findPetIdByDeviceId(String deviceId);
 }

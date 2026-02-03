@@ -1,5 +1,6 @@
 package com.dodo.backend.common.exception;
 
+import com.dodo.backend.activityhistory.exception.ActivityHistoryException;
 import com.dodo.backend.auth.exception.AuthException;
 import com.dodo.backend.pet.exception.PetException;
 import com.dodo.backend.user.exception.UserErrorCode;
@@ -59,6 +60,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserPetException.class)
     protected ResponseEntity<ErrorResponse> handleUserPetException(UserPetException e) {
         log.error("UserPetException occurred: {}", e.getErrorCode());
+        return toResponseEntity(e.getErrorCode());
+    }
+
+    /**
+     * 활동 기록(ActivityHistory) 도메인 비즈니스 로직에서 발생하는 {@link ActivityHistoryException}을 처리합니다.
+     */
+    @ExceptionHandler(ActivityHistoryException.class)
+    protected ResponseEntity<ErrorResponse> handleActivityHistoryException(ActivityHistoryException e) {
+        log.error("ActivityHistoryException occurred: {}", e.getErrorCode());
         return toResponseEntity(e.getErrorCode());
     }
 

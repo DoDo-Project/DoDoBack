@@ -2,6 +2,7 @@ package com.dodo.backend.pet.service;
 
 import com.dodo.backend.pet.dto.request.PetRequest.*;
 import com.dodo.backend.pet.dto.response.PetResponse.*;
+import com.dodo.backend.pet.entity.Pet;
 import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
@@ -111,4 +112,15 @@ public interface PetService {
      * @return 펫 ID (존재하지 않으면 Optional.empty())
      */
     Optional<Long> findPetIdByDeviceId(String deviceId);
+
+    /**
+     * ID로 펫을 조회합니다.
+     * <p>
+     * 존재하지 않을 경우 {@link com.dodo.backend.pet.exception.PetException} (PET_NOT_FOUND)를 던집니다.
+     * </p>
+     *
+     * @param petId 조회할 펫 ID
+     * @return 조회된 Pet 엔티티
+     */
+    Pet getPetById(Long petId);
 }

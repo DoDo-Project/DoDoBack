@@ -12,9 +12,6 @@ import java.util.UUID;
 
 /**
  * 펫 도메인과 관련된 응답 데이터를 캡슐화하는 DTO 그룹 클래스입니다.
- * <p>
- * 펫 등록, 수정, 조회, 가족 초대 및 승인, 삭제 등 다양한 API 응답에 사용되는
- * Inner Static Class들을 포함하고 있습니다.
  */
 @Schema(description = "펫 관련 응답 DTO 그룹")
 public class PetResponse {

@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -337,5 +336,26 @@ public class UserPetServiceImpl implements UserPetService {
     @Override
     public boolean existsFamilyMember(Long petId) {
         return userPetRepository.existsByPet_PetId(petId);
+    }
+
+    /**
+     * ID 기반으로 해당 유저가 특정 펫의 '승인된(APPROVED)' 주인인지 효율적으로 검증합니다.
+     * <p>
+     * 엔티티 조회 없이 ID만으로 존재 여부를 확인하므로 성능상 이점이 있습니다.
+     * 주로 다른 도메인 서비스(ActivityHistory 등)에서 권한 체크 용도로 호출합니다.
+     * </p>
+     *
+     * @param userId 확인할 유저 ID
+     * @param petId  확인할 펫 ID
+     * @return 승인된 주인이라면 true, 그렇지 않다면 false
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public boolean isApprovedPetOwner(UUID userId, Long petId) {
+        return userPetRepository.existsByUser_UsersIdAndPet_PetIdAndRegistrationStatus(
+                userId,
+                petId,
+                RegistrationStatus.APPROVED
+        );
     }
 }

@@ -174,6 +174,7 @@ public class UserServiceImpl implements UserService {
      *
      * @param userId 탈퇴 인증을 진행할 사용자의 Id
      */
+    @Transactional
     @Override
     public void requestWithdrawal(UUID userId) {
 
@@ -280,5 +281,13 @@ public class UserServiceImpl implements UserService {
         userMapper.updateNotificationStatus(userId, enabled);
     }
 
-
+    /**
+     * ID로 사용자 엔티티 조회 (예외 처리 포함)
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public User getUserById(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
+    }
 }

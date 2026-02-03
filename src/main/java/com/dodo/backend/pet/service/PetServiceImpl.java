@@ -437,4 +437,15 @@ public class PetServiceImpl implements PetService {
         return petRepository.findByDeviceId(deviceId)
                 .map(Pet::getPetId);
     }
+
+    /**
+     * ID로 펫 엔티티를 조회합니다.
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public Pet getPetById(Long petId) {
+        return petRepository.findById(petId)
+                .orElseThrow(() -> new PetException(PET_NOT_FOUND));
+    }
+
 }

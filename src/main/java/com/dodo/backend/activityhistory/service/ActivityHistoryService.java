@@ -5,6 +5,7 @@ import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.Activ
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityStartRequest;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse.ActivityCreateResponse;
+import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse.ActivitySimpleResponse;
 import com.dodo.backend.user.entity.User;
 
 import java.util.UUID;
@@ -31,11 +32,22 @@ public interface ActivityHistoryService {
     ActivityCreateResponse createActivity(UUID userId, ActivityCreateRequest request);
 
     /**
-     * 활동 기록을 시작(IN_PROGRESS)합니다.
+     * 활동 기록을 시작(IN_PROGRESS)하거나, 중단된 활동을 재개합니다.
      *
      * @param userId    요청한 사용자의 UUID
      * @param historyId 활동 기록 ID
-     * @param request   시작 위치 정보(위도, 경도)가 담긴 요청 DTO
+     * @param request   시작 위치 정보
+     * @return 성공 메시지가 담긴 단순 응답 DTO
      */
-    void startActivity(UUID userId, Long historyId, ActivityStartRequest request);
+    ActivitySimpleResponse startActivity(UUID userId, Long historyId, ActivityStartRequest request);
+
+    /**
+     * 진행 중인 활동 기록을 취소(중단)합니다.
+     *
+     * @param userId    요청한 사용자의 UUID
+     * @param historyId 활동 기록 ID
+     * @return 성공 메시지가 담긴 단순 응답 DTO
+     */
+    ActivitySimpleResponse cancelActivity(UUID userId, Long historyId);
+
 }

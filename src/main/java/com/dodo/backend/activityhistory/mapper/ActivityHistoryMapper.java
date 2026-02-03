@@ -20,4 +20,20 @@ public interface ActivityHistoryMapper {
                        @Param("status") String status,
                        @Param("startLatitude") BigDecimal startLatitude,
                        @Param("startLongitude") BigDecimal startLongitude);
+
+    /**
+     * 중단된 활동을 다시 진행 중으로 변경합니다. (재개)
+     * 종료 시간(endAt)은 초기화하고 상태를 변경합니다.
+     */
+    void resumeActivity(@Param("historyId") Long historyId,
+                        @Param("status") String status);
+
+    /**
+     * 활동을 중단(취소) 상태로 변경하고 종료 시간을 기록합니다.
+     *
+     * @param historyId 활동 기록 ID
+     * @param status    변경할 상태 (CANCELED)
+     */
+    void cancelActivity(@Param("historyId") Long historyId,
+                        @Param("status") String status);
 }

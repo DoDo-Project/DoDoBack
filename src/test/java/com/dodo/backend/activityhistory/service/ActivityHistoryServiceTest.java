@@ -362,4 +362,178 @@ class ActivityHistoryServiceTest {
         verify(activityHistoryMapper, times(0)).startActivity(any(), any(), any(), any());
         log.info("미발견 시작 실패 테스트가 통과되었습니다.");
     }
+
+    /**
+     * 중단된 활동을 재개하는 시나리오를 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 재개 성공: 상태가 CANCELED일 때 요청 시 재개 로직(resumeActivity)이 실행된다.")
+    void startActivity_Resume_Success() {
+        log.info("활동 재개 성공 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        Long historyId = 100L;
+
+        User user = User.builder().usersId(userId).build();
+        ActivityHistory activityHistory = ActivityHistory.builder()
+                .historyId(historyId)
+                .user(user)
+                .activityHistoryStatus(ActivityHistoryStatus.CANCELED) // 상태: 취소됨
+                .build();
+
+        ActivityHistoryRequest.ActivityStartRequest request = ActivityHistoryRequest.ActivityStartRequest.builder()
+                .startLatitude(BigDecimal.valueOf(37.5))
+                .startLongitude(BigDecimal.valueOf(127.5))
+                .build();
+
+        log.info("활동 기록이 CANCELED 상태라고 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.of(activityHistory));
+
+        // when
+        log.info("활동 시작(재개) 서비스 로직을 호출합니다.");
+        ActivityHistoryResponse.ActivitySimpleResponse response = activityHistoryService.startActivity(userId, historyId, request);
+
+        // then
+        log.info("Mapper의 resumeActivity가 호출되었는지 검증합니다.");
+        assertNotNull(response);
+        verify(activityHistoryMapper, times(1)).resumeActivity(
+                historyId,
+                ActivityHistoryStatus.IN_PROGRESS.name()
+        );
+        verify(activityHistoryMapper, times(0)).startActivity(any(), any(), any(), any());
+        log.info("활동 재개 성공 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 진행 중인 활동을 취소(중단)하는 성공 시나리오를 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 취소 성공: 상태가 IN_PROGRESS일 때 요청 시 취소 로직(cancelActivity)이 실행된다.")
+    void cancelActivity_Success() {
+        log.info("활동 취소 성공 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        Long historyId = 100L;
+
+        User user = User.builder().usersId(userId).build();
+        ActivityHistory activityHistory = ActivityHistory.builder()
+                .historyId(historyId)
+                .user(user)
+                .activityHistoryStatus(ActivityHistoryStatus.IN_PROGRESS)
+                .build();
+
+        log.info("활동 기록이 IN_PROGRESS 상태라고 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.of(activityHistory));
+
+        // when
+        log.info("활동 취소 서비스 로직을 호출합니다.");
+        ActivityHistoryResponse.ActivitySimpleResponse response = activityHistoryService.cancelActivity(userId, historyId);
+
+        // then
+        log.info("Mapper의 cancelActivity가 호출되었는지 검증합니다.");
+        assertNotNull(response);
+        assertEquals("활동 기록이 성공적으로 중단되었습니다.", response.getMessage());
+
+        verify(activityHistoryMapper, times(1)).cancelActivity(
+                historyId,
+                ActivityHistoryStatus.CANCELED.name()
+        );
+        log.info("활동 취소 성공 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 권한이 없는 사용자가 활동 취소를 시도할 때 예외 발생을 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 취소 실패: 기록의 소유자가 아닌 경우 예외가 발생한다.")
+    void cancelActivity_Fail_PermissionDenied() {
+        log.info("권한 없음으로 인한 활동 취소 실패 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        Long historyId = 100L;
+
+        User otherUser = User.builder().usersId(otherUserId).build();
+        ActivityHistory activityHistory = ActivityHistory.builder()
+                .historyId(historyId)
+                .user(otherUser)
+                .activityHistoryStatus(ActivityHistoryStatus.IN_PROGRESS)
+                .build();
+
+        log.info("활동 기록의 소유자가 요청자와 다르다고 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.of(activityHistory));
+
+        // when
+        log.info("취소 요청 시 예외가 발생하는지 확인합니다.");
+        ActivityHistoryException exception = assertThrows(ActivityHistoryException.class, () ->
+                activityHistoryService.cancelActivity(userId, historyId)
+        );
+
+        // then
+        log.info("발생한 예외 코드가 STOP_PERMISSION_DENIED인지 검증합니다.");
+        assertEquals(ActivityHistoryErrorCode.STOP_PERMISSION_DENIED, exception.getErrorCode());
+        verify(activityHistoryMapper, times(0)).cancelActivity(any(), any());
+        log.info("권한 없음 취소 실패 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 진행 중이지 않은 활동(이미 종료됨 등)을 취소하려 할 때 예외 발생을 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 취소 실패: 활동 상태가 IN_PROGRESS가 아닌 경우 예외가 발생한다.")
+    void cancelActivity_Fail_InvalidStatus() {
+        log.info("잘못된 상태로 인한 활동 취소 실패 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        Long historyId = 100L;
+
+        User user = User.builder().usersId(userId).build();
+        ActivityHistory activityHistory = ActivityHistory.builder()
+                .historyId(historyId)
+                .user(user)
+                .activityHistoryStatus(ActivityHistoryStatus.BEFORE)
+                .build();
+
+        log.info("활동 기록의 상태가 IN_PROGRESS가 아니라고 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.of(activityHistory));
+
+        // when
+        log.info("취소 요청 시 예외가 발생하는지 확인합니다.");
+        ActivityHistoryException exception = assertThrows(ActivityHistoryException.class, () ->
+                activityHistoryService.cancelActivity(userId, historyId)
+        );
+
+        // then
+        log.info("발생한 예외 코드가 ALREADY_COMPLETED인지 검증합니다.");
+        assertEquals(ActivityHistoryErrorCode.ALREADY_COMPLETED, exception.getErrorCode());
+        verify(activityHistoryMapper, times(0)).cancelActivity(any(), any());
+        log.info("잘못된 상태 취소 실패 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 존재하지 않는 활동 기록 ID로 취소를 시도할 때 예외 발생을 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 취소 실패: 활동 기록이 존재하지 않는 경우 예외가 발생한다.")
+    void cancelActivity_Fail_NotFound() {
+        log.info("존재하지 않는 기록으로 인한 활동 취소 실패 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        Long historyId = 999L;
+
+        log.info("해당 ID의 활동 기록이 없다고 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.empty());
+
+        // when
+        log.info("취소 요청 시 예외가 발생하는지 확인합니다.");
+        ActivityHistoryException exception = assertThrows(ActivityHistoryException.class, () ->
+                activityHistoryService.cancelActivity(userId, historyId)
+        );
+
+        // then
+        log.info("발생한 예외 코드가 HISTORY_NOT_FOUND인지 검증합니다.");
+        assertEquals(ActivityHistoryErrorCode.HISTORY_NOT_FOUND, exception.getErrorCode());
+        verify(activityHistoryMapper, times(0)).cancelActivity(any(), any());
+        log.info("미발견 취소 실패 테스트가 통과되었습니다.");
+    }
 }

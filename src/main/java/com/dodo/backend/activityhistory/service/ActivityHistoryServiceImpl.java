@@ -1,13 +1,11 @@
 package com.dodo.backend.activityhistory.service;
 
-import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest;
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityCreateRequest;
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityStartRequest;
-import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse.ActivityCreateResponse;
+import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse.ActivitySimpleResponse;
 import com.dodo.backend.activityhistory.entity.ActivityHistory;
 import com.dodo.backend.activityhistory.entity.ActivityHistoryStatus;
-import com.dodo.backend.activityhistory.exception.ActivityHistoryErrorCode;
 import com.dodo.backend.activityhistory.exception.ActivityHistoryException;
 import com.dodo.backend.activityhistory.mapper.ActivityHistoryMapper;
 import com.dodo.backend.activityhistory.repository.ActivityHistoryRepository;
@@ -28,7 +26,8 @@ import static com.dodo.backend.activityhistory.exception.ActivityHistoryErrorCod
 /**
  * {@link ActivityHistoryService} 인터페이스의 구현체 클래스입니다.
  * <p>
- * 반려동물의 활동 기록(ActivityHistory) 생성 및 관리를 담당하는 비즈니스 로직을 수행합니다.
+ * 반려동물의 활동 기록(ActivityHistory)의 생성(Create), 시작(Start/Resume), 중단(Cancel) 등
+ * 활동 생명주기를 관리하는 핵심 비즈니스 로직을 수행합니다.
  * </p>
  */
 @Service
@@ -46,10 +45,9 @@ public class ActivityHistoryServiceImpl implements ActivityHistoryService {
      * 새로운 활동 기록을 생성합니다.
      * <p>
      * <ol>
-     * <li>{@link UserService}를 통해 요청된 User ID로 사용자 정보를 조회합니다. (실패 시 예외 발생)</li>
-     * <li>{@link PetService}를 통해 요청된 Pet ID로 반려동물 정보를 조회합니다. (실패 시 예외 발생)</li>
-     * <li>{@link UserPetService}를 통해 요청한 유저가 해당 반려동물의 승인된(APPROVED) 주인인지 검증합니다.</li>
-     * <li>해당 반려동물이 이미 진행 중인 활동(IN_PROGRESS)이 있는지 확인하여 중복 생성을 방지합니다.</li>
+     * <li>사용자(User) 및 반려동물(Pet) 정보를 조회합니다.</li>
+     * <li>요청한 유저가 해당 반려동물의 승인된(APPROVED) 주인인지 검증합니다.</li>
+     * <li>해당 반려동물이 이미 진행 중(IN_PROGRESS)이거나 대기 중(BEFORE)인 활동이 있는지 확인하여 중복 생성을 방지합니다.</li>
      * <li>검증이 완료되면, 활동 상태를 '시작 전(BEFORE)'으로 설정하여 DB에 저장합니다.</li>
      * </ol>
      *
@@ -57,7 +55,7 @@ public class ActivityHistoryServiceImpl implements ActivityHistoryService {
      * @param request 생성할 활동 정보가 담긴 요청 DTO (petId, activityType)
      * @return 생성된 활동 기록의 ID와 유형을 포함한 응답 DTO
      * @throws ActivityHistoryException 권한이 없거나({@code CREATE_PERMISSION_DENIED}),
-     * 이미 진행 중인 활동이 존재할 경우({@code ALREADY_IN_PROGRESS}) 발생
+     * 이미 진행 중({@code ALREADY_IN_PROGRESS}) 또는 대기 중({@code ALREADY_EXISTS_BEFORE})인 활동이 존재할 경우
      */
     @Transactional
     @Override
@@ -66,7 +64,6 @@ public class ActivityHistoryServiceImpl implements ActivityHistoryService {
             ActivityCreateRequest request) {
 
         User user = userService.getUserById(userId);
-
         Pet pet = petService.getPetById(request.getPetId());
 
         boolean isOwner = userPetService.isApprovedPetOwner(user.getUsersId(), pet.getPetId());
@@ -84,7 +81,6 @@ public class ActivityHistoryServiceImpl implements ActivityHistoryService {
         }
 
         ActivityHistory activityHistory = request.toEntity(user, pet);
-
         ActivityHistory savedHistory = activityHistoryRepository.save(activityHistory);
 
         log.info("활동 기록 생성 완료 - HistoryId: {}, PetId: {}, User: {}",
@@ -94,22 +90,28 @@ public class ActivityHistoryServiceImpl implements ActivityHistoryService {
     }
 
     /**
-     * 활동 기록을 시작 상태(IN_PROGRESS)로 변경합니다.
+     * 활동 기록을 시작(IN_PROGRESS)하거나, 중단된 활동을 재개합니다.
      * <p>
-     * <ol>
-     * <li>요청된 History ID로 활동 기록을 조회합니다. (존재하지 않을 경우 {@code HISTORY_NOT_FOUND} 발생)</li>
-     * <li>해당 활동 기록의 소유자(User)인지 검증합니다. (권한 없을 경우 {@code START_PERMISSION_DENIED} 발생)</li>
-     * <li>활동 상태가 '시작 전(BEFORE)'인지 확인합니다. (이미 진행 중이거나 종료된 경우 {@code ALREADY_IN_PROGRESS} 발생)</li>
-     * <li>시작 시간(현재)과 상태(IN_PROGRESS)를 업데이트합니다.</li>
-     * </ol>
+     * 활동의 현재 상태에 따라 두 가지 로직으로 분기됩니다:
+     * <ul>
+     * <li><b>시작 전(BEFORE):</b> 최초 시작으로 간주하여 시작 시간과 위치 정보를 기록하고 상태를 변경합니다.</li>
+     * <li><b>취소됨(CANCELED):</b> 활동 재개로 간주하여 상태를 변경하고 종료 시간을 초기화합니다. (기존 시작 정보 유지)</li>
+     * </ul>
      *
      * @param userId    요청한 사용자의 UUID
      * @param historyId 활동 기록 ID
-     * @throws ActivityHistoryException 권한이 없거나, 상태가 올바르지 않은 경우 발생
+     * @param request   시작 시점의 GPS 위치 정보(위도, 경도)
+     * @return 처리 결과 메시지가 담긴 단순 응답 DTO
+     * @throws ActivityHistoryException
+     * <ul>
+     * <li>{@code HISTORY_NOT_FOUND}: 해당 ID의 활동 기록이 없는 경우</li>
+     * <li>{@code START_PERMISSION_DENIED}: 활동 기록의 소유자가 아닌 경우</li>
+     * <li>{@code ALREADY_IN_PROGRESS}: 이미 진행 중이거나 종료된 활동인 경우</li>
+     * </ul>
      */
     @Transactional
     @Override
-    public void startActivity(UUID userId, Long historyId, ActivityStartRequest request) {
+    public ActivitySimpleResponse startActivity(UUID userId, Long historyId, ActivityStartRequest request) {
 
         ActivityHistory activityHistory = activityHistoryRepository.findById(historyId)
                 .orElseThrow(() -> new ActivityHistoryException(HISTORY_NOT_FOUND));
@@ -118,18 +120,68 @@ public class ActivityHistoryServiceImpl implements ActivityHistoryService {
             throw new ActivityHistoryException(START_PERMISSION_DENIED);
         }
 
-        if (activityHistory.getActivityHistoryStatus() != ActivityHistoryStatus.BEFORE) {
+        ActivityHistoryStatus status = activityHistory.getActivityHistoryStatus();
+        String message;
+
+        if (status == ActivityHistoryStatus.BEFORE) {
+            activityHistoryMapper.startActivity(
+                    historyId,
+                    ActivityHistoryStatus.IN_PROGRESS.name(),
+                    request.getStartLatitude(),
+                    request.getStartLongitude()
+            );
+            log.info("활동 최초 시작 - HistoryId: {}, User: {}", historyId, userId);
+            message = "활동 기록이 시작되었습니다.";
+
+        } else if (status == ActivityHistoryStatus.CANCELED) {
+            activityHistoryMapper.resumeActivity(
+                    historyId,
+                    ActivityHistoryStatus.IN_PROGRESS.name()
+            );
+            log.info("활동 재개 - HistoryId: {}, User: {}", historyId, userId);
+            message = "활동 기록이 재개되었습니다.";
+        } else {
             throw new ActivityHistoryException(ALREADY_IN_PROGRESS);
         }
 
-        activityHistoryMapper.startActivity(
-                historyId,
-                "IN_PROGRESS",
-                request.getStartLatitude(),
-                request.getStartLongitude()
-        );
+        return ActivitySimpleResponse.toDto(message);
+    }
 
-        log.info("활동 시작 처리 완료 - HistoryId: {}, User: {}, Lat: {}, Lon: {}",
-                historyId, userId, request.getStartLatitude(), request.getStartLongitude());
+    /**
+     * 진행 중인 활동을 취소(중단) 상태로 변경합니다.
+     * <p>
+     * 활동 상태를 '취소됨(CANCELED)'으로 변경하고, 중단된 시점(종료 시간)을 기록합니다.
+     * </p>
+     *
+     * @param userId    요청한 사용자의 UUID
+     * @param historyId 활동 기록 ID
+     * @return 처리 결과 메시지가 담긴 단순 응답 DTO
+     * @throws ActivityHistoryException
+     * <ul>
+     * <li>{@code HISTORY_NOT_FOUND}: 해당 ID의 활동 기록이 없는 경우</li>
+     * <li>{@code STOP_PERMISSION_DENIED}: 활동 기록의 소유자가 아닌 경우</li>
+     * <li>{@code ALREADY_COMPLETED}: 진행 중인 활동(IN_PROGRESS)이 아닌 경우</li>
+     * </ul>
+     */
+    @Transactional
+    @Override
+    public ActivitySimpleResponse cancelActivity(UUID userId, Long historyId) {
+
+        ActivityHistory activityHistory = activityHistoryRepository.findById(historyId)
+                .orElseThrow(() -> new ActivityHistoryException(HISTORY_NOT_FOUND));
+
+        if (!activityHistory.getUser().getUsersId().equals(userId)) {
+            throw new ActivityHistoryException(STOP_PERMISSION_DENIED);
+        }
+
+        if (activityHistory.getActivityHistoryStatus() != ActivityHistoryStatus.IN_PROGRESS) {
+            throw new ActivityHistoryException(ALREADY_COMPLETED);
+        }
+
+        activityHistoryMapper.cancelActivity(historyId, ActivityHistoryStatus.CANCELED.name());
+
+        log.info("활동 중단(취소) 완료 - HistoryId: {}, User: {}", historyId, userId);
+
+        return ActivitySimpleResponse.toDto("활동 기록이 성공적으로 중단되었습니다.");
     }
 }

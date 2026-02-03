@@ -16,4 +16,26 @@
             start_longitude = #{startLongitude}
         WHERE history_id = #{historyId}
     </update>
+
+    <!-- 취소된 활동 기록을 다시 '진행 중(IN_PROGRESS)' 상태로 변경합니다.
+         1. activity_history_status : 활동 상태를 IN_PROGRESS로 변경
+         2. activity_history_end_at : 일시정지 시 기록된 종료 시간을 NULL로 초기화
+         3. WHERE history_id : historyId를 기준으로 특정 활동 기록을 식별 -->
+    <update id="resumeActivity">
+        UPDATE activity_history
+        SET activity_history_status = #{status},
+            activity_history_end_at = NULL
+        WHERE history_id = #{historyId}
+    </update>
+
+    <!-- 진행 중인 활동 기록을 '취소(CANCELED)' 상태로 변경합니다.
+        1. activity_history_status : 활동 상태를 CANCELED로 변경
+        2. activity_history_end_at : 활동 취소 시점을 현재 시간(NOW())으로 기록
+        3. WHERE history_id : historyId를 기준으로 특정 활동 기록을 식별 -->
+    <update id="cancelActivity">
+        UPDATE activity_history
+        SET activity_history_status = #{status},
+            activity_history_end_at = NOW()
+        WHERE history_id = #{historyId}
+    </update>
 </mapper>

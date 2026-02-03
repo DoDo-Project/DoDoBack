@@ -5,6 +5,7 @@ import com.dodo.backend.user.dto.request.UserRequest.UserUpdateRequest;
 import com.dodo.backend.user.dto.response.UserResponse.UserInfoResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserRegisterResponse;
 import com.dodo.backend.user.dto.response.UserResponse.UserUpdateResponse;
+import com.dodo.backend.user.entity.User;
 
 import java.util.Map;
 import java.util.UUID;
@@ -75,5 +76,16 @@ public interface UserService {
      * @param enabled 변경할 알림 수신 여부 (true: 수신 허용, false: 수신 거부)
      */
     void updateNotification(UUID userId, Boolean enabled);
+
+    /**
+     * ID로 사용자 엔티티를 조회합니다.
+     * <p>
+     * 존재하지 않을 경우 {@link com.dodo.backend.user.exception.UserException} (USER_NOT_FOUND)를 던집니다.
+     * </p>
+     *
+     * @param userId 조회할 사용자의 UUID
+     * @return 조회된 User 엔티티
+     */
+    User getUserById(UUID userId);
 
 }

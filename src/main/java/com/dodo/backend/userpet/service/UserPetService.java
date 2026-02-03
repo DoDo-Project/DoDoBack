@@ -111,4 +111,16 @@ public interface UserPetService {
      * @return 가족이 남아있다면 true
      */
     boolean existsFamilyMember(Long petId);
+
+    /**
+     * 해당 유저가 특정 펫의 '승인된(APPROVED)' 주인인지 확인합니다.
+     * <p>
+     * ID 기반의 효율적인 조회를 통해 소유권을 검증합니다.
+     * </p>
+     *
+     * @param userId 확인할 유저 ID
+     * @param petId  확인할 펫 ID
+     * @return 승인된 주인이라면 true, 그렇지 않다면 false
+     */
+    boolean isApprovedPetOwner(UUID userId, Long petId);
 }

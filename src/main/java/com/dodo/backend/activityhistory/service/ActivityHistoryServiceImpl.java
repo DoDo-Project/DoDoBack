@@ -2,12 +2,14 @@ package com.dodo.backend.activityhistory.service;
 
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest;
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityCreateRequest;
+import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityStartRequest;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse.ActivityCreateResponse;
 import com.dodo.backend.activityhistory.entity.ActivityHistory;
 import com.dodo.backend.activityhistory.entity.ActivityHistoryStatus;
 import com.dodo.backend.activityhistory.exception.ActivityHistoryErrorCode;
 import com.dodo.backend.activityhistory.exception.ActivityHistoryException;
+import com.dodo.backend.activityhistory.mapper.ActivityHistoryMapper;
 import com.dodo.backend.activityhistory.repository.ActivityHistoryRepository;
 import com.dodo.backend.pet.entity.Pet;
 import com.dodo.backend.pet.service.PetService;
@@ -38,6 +40,7 @@ public class ActivityHistoryServiceImpl implements ActivityHistoryService {
     private final PetService petService;
     private final UserPetService userPetService;
     private final UserService userService;
+    private final ActivityHistoryMapper activityHistoryMapper;
 
     /**
      * 새로운 활동 기록을 생성합니다.
@@ -88,5 +91,45 @@ public class ActivityHistoryServiceImpl implements ActivityHistoryService {
                 savedHistory.getHistoryId(), pet.getPetId(), userId);
 
         return ActivityCreateResponse.toDto(savedHistory, "활동 기록이 성공적으로 생성되었습니다.");
+    }
+
+    /**
+     * 활동 기록을 시작 상태(IN_PROGRESS)로 변경합니다.
+     * <p>
+     * <ol>
+     * <li>요청된 History ID로 활동 기록을 조회합니다. (존재하지 않을 경우 {@code HISTORY_NOT_FOUND} 발생)</li>
+     * <li>해당 활동 기록의 소유자(User)인지 검증합니다. (권한 없을 경우 {@code START_PERMISSION_DENIED} 발생)</li>
+     * <li>활동 상태가 '시작 전(BEFORE)'인지 확인합니다. (이미 진행 중이거나 종료된 경우 {@code ALREADY_IN_PROGRESS} 발생)</li>
+     * <li>시작 시간(현재)과 상태(IN_PROGRESS)를 업데이트합니다.</li>
+     * </ol>
+     *
+     * @param userId    요청한 사용자의 UUID
+     * @param historyId 활동 기록 ID
+     * @throws ActivityHistoryException 권한이 없거나, 상태가 올바르지 않은 경우 발생
+     */
+    @Transactional
+    @Override
+    public void startActivity(UUID userId, Long historyId, ActivityStartRequest request) {
+
+        ActivityHistory activityHistory = activityHistoryRepository.findById(historyId)
+                .orElseThrow(() -> new ActivityHistoryException(HISTORY_NOT_FOUND));
+
+        if (!activityHistory.getUser().getUsersId().equals(userId)) {
+            throw new ActivityHistoryException(START_PERMISSION_DENIED);
+        }
+
+        if (activityHistory.getActivityHistoryStatus() != ActivityHistoryStatus.BEFORE) {
+            throw new ActivityHistoryException(ALREADY_IN_PROGRESS);
+        }
+
+        activityHistoryMapper.startActivity(
+                historyId,
+                "IN_PROGRESS",
+                request.getStartLatitude(),
+                request.getStartLongitude()
+        );
+
+        log.info("활동 시작 처리 완료 - HistoryId: {}, User: {}, Lat: {}, Lon: {}",
+                historyId, userId, request.getStartLatitude(), request.getStartLongitude());
     }
 }

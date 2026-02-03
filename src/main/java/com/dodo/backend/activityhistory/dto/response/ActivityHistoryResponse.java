@@ -45,4 +45,29 @@ public class ActivityHistoryResponse {
                     .build();
         }
     }
+
+    /**
+     * 데이터 없이 성공 메시지만 반환할 때 사용하는 간단한 응답 DTO입니다.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @Schema(description = "활동 관련 작업 성공 응답 (메시지 전용)")
+    public static class ActivitySimpleResponse {
+
+        @Schema(description = "응답 메시지", example = "요청이 성공적으로 처리되었습니다.")
+        private String message;
+
+        /**
+         * 전달받은 메시지를 포함하는 단순 응답 DTO를 생성합니다.
+         *
+         * @param message 클라이언트에게 전달할 처리 결과 메시지
+         * @return 메시지가 설정된 {@link ActivitySimpleResponse} 객체
+         */
+        public static ActivitySimpleResponse toDto(String message) {
+            return ActivitySimpleResponse.builder()
+                    .message(message)
+                    .build();
+        }
+    }
 }

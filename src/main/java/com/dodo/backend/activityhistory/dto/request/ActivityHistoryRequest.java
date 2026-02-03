@@ -12,6 +12,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
  * 활동기록 도메인과 관련된 요청 데이터를 캡슐화하는 DTO 그룹 클래스입니다.
  */
@@ -44,7 +46,7 @@ public class ActivityHistoryRequest {
          *
          * @param user 활동을 생성하는 사용자 엔티티
          * @param pet  활동 대상 반려동물 엔티티
-         * @return 초기화된 ActivityHistory 엔티티 (상태: BEFORE)
+         * @return 초기화된 ActivityHistory 엔티티 (상태: BEFORE)f
          */
         public ActivityHistory toEntity(User user, Pet pet) {
             return ActivityHistory.builder()
@@ -54,5 +56,27 @@ public class ActivityHistoryRequest {
                     .activityHistoryStatus(ActivityHistoryStatus.BEFORE)
                     .build();
         }
+    }
+
+    /**
+     * 생성된 활동 기록을 시작(IN_PROGRESS)하기 위해 클라이언트로부터 전달받는 요청 DTO입니다.
+     * <p>
+     * 활동 시작 시점의 필수 GPS 위치 정보(위도, 경도)를 포함합니다.
+     * </p>
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Schema(description = "활동 시작 요청 데이터 (위치 정보 포함)")
+    public static class ActivityStartRequest {
+
+        @Schema(description = "시작 위도", example = "37.5665")
+        @NotNull(message = "시작 위도는 필수입니다.")
+        private BigDecimal startLatitude;
+
+        @Schema(description = "시작 경도", example = "126.9780")
+        @NotNull(message = "시작 경도는 필수입니다.")
+        private BigDecimal startLongitude;
     }
 }

@@ -1,8 +1,11 @@
 package com.dodo.backend.activityhistory.controller;
 
+import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest;
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityCreateRequest;
+import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityStartRequest;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse.ActivityCreateResponse;
+import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse.ActivitySimpleResponse;
 import com.dodo.backend.activityhistory.service.ActivityHistoryService;
 import com.dodo.backend.common.exception.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,10 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
@@ -87,5 +87,62 @@ public class ActivityHistoryController {
         ActivityCreateResponse response = activityHistoryService.createActivity(userId, request);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * 생성된 활동 기록을 시작(IN_PROGRESS)합니다.
+     * <p>
+     * 활동 상태가 '시작 전(BEFORE)'에서 '진행 중(IN_PROGRESS)'으로 변경되며,
+     * 시작 시간과 요청된 위치(GPS) 정보가 기록됩니다.
+     * </p>
+     *
+     * @param historyId   활동 기록 ID (Path Variable)
+     * @param userDetails 인증 객체
+     * @param request     시작 위치 정보(위도, 경도) DTO
+     * @return 성공 메시지가 담긴 DTO
+     */
+    @Operation(summary = "활동 시작",
+            description = "대기 중(BEFORE)인 활동 기록을 시작(IN_PROGRESS)합니다.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "활동 기록이 시작되었습니다.",
+                    content = @Content(schema = @Schema(implementation = ActivitySimpleResponse.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "400 Bad Request", value = "{\"status\": 400, \"message\": \"잘못된 요청입니다.\"}"))),
+            @ApiResponse(responseCode = "401", description = "로그인이 필요한 기능입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "401 Unauthorized", value = "{\"status\": 401, \"message\": \"로그인이 필요한 기능입니다.\"}"))),
+            @ApiResponse(responseCode = "403", description = "활동을 시작할 권한이 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "403 Forbidden", value = "{\"status\": 403, \"message\": \"활동을 시작할 권한이 없습니다.\"}"))),
+            @ApiResponse(responseCode = "404", description = "해당 활동 기록을 찾을 수 없습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "404 Not Found", value = "{\"status\": 404, \"message\": \"해당 활동 기록을 찾을 수 없습니다.\"}"))),
+            @ApiResponse(responseCode = "409", description = "이미 활동기록이 진행중입니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "409 Conflict", value = "{\"status\": 409, \"message\": \"이미 활동기록이 진행중입니다.\"}"))),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류가 발생했습니다.",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
+                            examples = @ExampleObject(name = "500 Internal Server Error", value = "{\"status\": 500, \"message\": \"서버 내부 오류가 발생했습니다.\"}")))
+    })
+    @PatchMapping("/{historyId}/start")
+    public ResponseEntity<ActivitySimpleResponse> startActivity(
+            @PathVariable Long historyId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid ActivityStartRequest request
+    ) {
+        UUID userId = UUID.fromString(userDetails.getUsername());
+        log.info("활동 시작 요청 - User: {}, HistoryId: {}, Lat: {}, Lon: {}",
+                userId, historyId, request.getStartLatitude(), request.getStartLongitude());
+
+        activityHistoryService.startActivity(userId, historyId, request);
+
+        return ResponseEntity.ok(ActivitySimpleResponse.toDto("활동 기록이 시작되었습니다."));
     }
 }

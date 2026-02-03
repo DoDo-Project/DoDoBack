@@ -1,5 +1,6 @@
 package com.dodo.backend.activityhistory.service;
 
+import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest;
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityCreateRequest;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse;
 import com.dodo.backend.activityhistory.entity.ActivityHistory;
@@ -7,6 +8,7 @@ import com.dodo.backend.activityhistory.entity.ActivityHistoryStatus;
 import com.dodo.backend.activityhistory.entity.ActivityType;
 import com.dodo.backend.activityhistory.exception.ActivityHistoryErrorCode;
 import com.dodo.backend.activityhistory.exception.ActivityHistoryException;
+import com.dodo.backend.activityhistory.mapper.ActivityHistoryMapper;
 import com.dodo.backend.activityhistory.repository.ActivityHistoryRepository;
 import com.dodo.backend.pet.entity.Pet;
 import com.dodo.backend.pet.service.PetService;
@@ -22,6 +24,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -42,6 +46,9 @@ class ActivityHistoryServiceTest {
 
     @Mock
     private ActivityHistoryRepository activityHistoryRepository;
+
+    @Mock
+    private ActivityHistoryMapper activityHistoryMapper;
 
     @Mock
     private PetService petService;
@@ -211,5 +218,148 @@ class ActivityHistoryServiceTest {
         assertEquals(ActivityHistoryErrorCode.ALREADY_EXISTS_BEFORE, exception.getErrorCode());
         verify(activityHistoryRepository, times(0)).save(any(ActivityHistory.class));
         log.info("시작 대기 중 활동 중복 실패 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 활동 시작 성공 시나리오를 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 시작 성공: 정상 요청 시 상태가 IN_PROGRESS로 변경되고 Mapper가 호출된다.")
+    void startActivity_Success() {
+        log.info("활동 시작 성공 케이스 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        Long historyId = 100L;
+
+        User user = User.builder().usersId(userId).build();
+        ActivityHistory activityHistory = ActivityHistory.builder()
+                .historyId(historyId)
+                .user(user)
+                .activityHistoryStatus(ActivityHistoryStatus.BEFORE)
+                .build();
+
+        // Mocking: 요청 객체 (위치 정보 포함)
+        ActivityHistoryRequest.ActivityStartRequest request = ActivityHistoryRequest.ActivityStartRequest.builder()
+                .startLatitude(BigDecimal.valueOf(37.1234))
+                .startLongitude(BigDecimal.valueOf(127.1234))
+                .build();
+
+        log.info("활동 기록이 존재하고, 소유자이며, 상태가 BEFORE인 상황을 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.of(activityHistory));
+
+        // when
+        log.info("활동 시작 서비스 로직을 호출합니다.");
+        activityHistoryService.startActivity(userId, historyId, request);
+
+        // then
+        log.info("Mapper의 startActivity 메서드가 올바른 파라미터로 호출되었는지 검증합니다.");
+        verify(activityHistoryMapper, times(1)).startActivity(
+                historyId,
+                ActivityHistoryStatus.IN_PROGRESS.name(),
+                request.getStartLatitude(),
+                request.getStartLongitude()
+        );
+        log.info("활동 시작 성공 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 권한이 없는 사용자가 활동 시작을 시도할 때 예외 발생을 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 시작 실패: 기록의 소유자가 아닌 경우 예외가 발생한다.")
+    void startActivity_Fail_PermissionDenied() {
+        log.info("권한 없음으로 인한 활동 시작 실패 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        Long historyId = 100L;
+
+        User otherUser = User.builder().usersId(otherUserId).build();
+        ActivityHistory activityHistory = ActivityHistory.builder()
+                .historyId(historyId)
+                .user(otherUser)
+                .activityHistoryStatus(ActivityHistoryStatus.BEFORE)
+                .build();
+
+        ActivityHistoryRequest.ActivityStartRequest request = ActivityHistoryRequest.ActivityStartRequest.builder().build();
+
+        log.info("활동 기록의 소유자가 요청자와 다르다고 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.of(activityHistory));
+
+        // when
+        log.info("시작 요청 시 예외가 발생하는지 확인합니다.");
+        ActivityHistoryException exception = assertThrows(ActivityHistoryException.class, () ->
+                activityHistoryService.startActivity(userId, historyId, request)
+        );
+
+        // then
+        log.info("발생한 예외 코드가 START_PERMISSION_DENIED인지 검증합니다.");
+        assertEquals(ActivityHistoryErrorCode.START_PERMISSION_DENIED, exception.getErrorCode());
+        verify(activityHistoryMapper, times(0)).startActivity(any(), any(), any(), any());
+        log.info("권한 없음 시작 실패 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 이미 진행 중이거나 완료된 활동을 다시 시작하려 할 때 예외 발생을 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 시작 실패: 활동 상태가 BEFORE가 아닌 경우 예외가 발생한다.")
+    void startActivity_Fail_InvalidStatus() {
+        log.info("잘못된 상태로 인한 활동 시작 실패 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        Long historyId = 100L;
+
+        User user = User.builder().usersId(userId).build();
+        ActivityHistory activityHistory = ActivityHistory.builder()
+                .historyId(historyId)
+                .user(user)
+                .activityHistoryStatus(ActivityHistoryStatus.IN_PROGRESS)
+                .build();
+
+        ActivityHistoryRequest.ActivityStartRequest request = ActivityHistoryRequest.ActivityStartRequest.builder().build();
+
+        log.info("활동 기록의 상태가 이미 IN_PROGRESS라고 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.of(activityHistory));
+
+        // when
+        log.info("시작 요청 시 예외가 발생하는지 확인합니다.");
+        ActivityHistoryException exception = assertThrows(ActivityHistoryException.class, () ->
+                activityHistoryService.startActivity(userId, historyId, request)
+        );
+
+        // then
+        log.info("발생한 예외 코드가 ALREADY_IN_PROGRESS인지 검증합니다.");
+        assertEquals(ActivityHistoryErrorCode.ALREADY_IN_PROGRESS, exception.getErrorCode());
+        verify(activityHistoryMapper, times(0)).startActivity(any(), any(), any(), any());
+        log.info("잘못된 상태 시작 실패 테스트가 통과되었습니다.");
+    }
+
+    /**
+     * 존재하지 않는 활동 기록 ID로 시작을 시도할 때 예외 발생을 테스트합니다.
+     */
+    @Test
+    @DisplayName("활동 시작 실패: 활동 기록이 존재하지 않는 경우 예외가 발생한다.")
+    void startActivity_Fail_NotFound() {
+        log.info("존재하지 않는 기록으로 인한 활동 시작 실패 테스트를 시작합니다.");
+        // given
+        UUID userId = UUID.randomUUID();
+        Long historyId = 999L;
+        ActivityHistoryRequest.ActivityStartRequest request = ActivityHistoryRequest.ActivityStartRequest.builder().build();
+
+        log.info("해당 ID의 활동 기록이 없다고 설정합니다.");
+        given(activityHistoryRepository.findById(historyId)).willReturn(Optional.empty());
+
+        // when
+        log.info("시작 요청 시 예외가 발생하는지 확인합니다.");
+        ActivityHistoryException exception = assertThrows(ActivityHistoryException.class, () ->
+                activityHistoryService.startActivity(userId, historyId, request)
+        );
+
+        // then
+        log.info("발생한 예외 코드가 HISTORY_NOT_FOUND인지 검증합니다.");
+        assertEquals(ActivityHistoryErrorCode.HISTORY_NOT_FOUND, exception.getErrorCode());
+        verify(activityHistoryMapper, times(0)).startActivity(any(), any(), any(), any());
+        log.info("미발견 시작 실패 테스트가 통과되었습니다.");
     }
 }

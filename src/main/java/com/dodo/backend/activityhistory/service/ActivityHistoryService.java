@@ -2,6 +2,7 @@ package com.dodo.backend.activityhistory.service;
 
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest;
 import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityCreateRequest;
+import com.dodo.backend.activityhistory.dto.request.ActivityHistoryRequest.ActivityStartRequest;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse;
 import com.dodo.backend.activityhistory.dto.response.ActivityHistoryResponse.ActivityCreateResponse;
 import com.dodo.backend.user.entity.User;
@@ -28,4 +29,13 @@ public interface ActivityHistoryService {
      * @return 생성된 활동 기록의 응답 DTO (HistoryId 포함)
      */
     ActivityCreateResponse createActivity(UUID userId, ActivityCreateRequest request);
+
+    /**
+     * 활동 기록을 시작(IN_PROGRESS)합니다.
+     *
+     * @param userId    요청한 사용자의 UUID
+     * @param historyId 활동 기록 ID
+     * @param request   시작 위치 정보(위도, 경도)가 담긴 요청 DTO
+     */
+    void startActivity(UUID userId, Long historyId, ActivityStartRequest request);
 }
